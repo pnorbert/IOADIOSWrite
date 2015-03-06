@@ -1,0 +1,347 @@
+ /*---------------------------------------------------------------------------*\
+  =========                 |
+  \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
+   \\    /   O peration     |
+    \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
+     \\/     M anipulation  |               2015 Norbert Podhorszki
+-------------------------------------------------------------------------------
+License
+    This file is part of OpenFOAM.
+
+    OpenFOAM is free software: you can redistribute it and/or modify it
+    under the terms of the GNU General Public License as published by
+    the Free Software Foundation, either version 3 of the License, or
+    (at your option) any later version.
+
+    OpenFOAM is distributed in the hope that it will be useful, but WITHOUT
+    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
+    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License
+    for more details.
+
+    You should have received a copy of the GNU General Public License
+    along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
+
+\*---------------------------------------------------------------------------*/
+
+#include "adiosWrite.H"
+#include "cellModeller.H"
+
+// * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
+
+void Foam::adiosWrite::meshDefine()
+{
+    Info<< "adiosWrite::meshDefine:" << endl;
+    
+    // Find over all (global) number of cells per process
+    nCells_[Pstream::myProcNo()] = mesh_.cells().size();
+    Pstream::gatherList(nCells_);
+    Pstream::scatterList(nCells_);
+
+    // Define time and time index as single scalar (written from rank 0)
+    adios_define_var (groupID_, "mesh/time",    "", adios_integer, NULL, NULL, NULL);
+    adios_define_var (groupID_, "mesh/timeidx", "", adios_integer, NULL, NULL, NULL);
+
+    // Define mesh
+    meshDefinePoints();
+    meshDefineCells();
+    
+    Info<< endl;
+}
+
+void Foam::adiosWrite::meshWrite()
+{
+    Info<< "adiosWrite::meshWrite:" << endl;
+    
+    char datasetName[80];
+    sprintf (datasetName, "mesh/time");
+    int t = mesh_.time().timeOutputValue();
+    adios_write(fileID_, datasetName, &t);
+
+    sprintf (datasetName, "mesh/timeidx");
+    t = mesh_.time().timeIndex();
+    adios_write(fileID_, datasetName, &t);
+
+    // Write mesh
+    meshWritePoints();
+    meshWriteCells();
+    
+    Info<< endl;
+}
+
+void Foam::adiosWrite::meshDefinePoints()
+{
+    Info<< "  meshDefinePoints" << endl;
+
+    const pointField& points = mesh_.points();
+
+    // Find out how many points each process has
+    List<label> nPoints(Pstream::nProcs());
+    nPoints[Pstream::myProcNo()] = points.size();
+    Pstream::gatherList(nPoints);
+    Pstream::scatterList(nPoints);
+
+    /*
+    // Sum total number of particles on all processes
+    label nTotalPoints = sum(nPoints);
+
+    int myoffset = 0;
+    for (label proc=0; proc < Pstream::myProcNo(); proc++)
+    {
+        myoffset += nPoints[proc];
+    }
+    */
+
+    // Create the dataset for points
+    char datasetName[80];
+    char ldimstr[16];
+    char gdimstr[16];
+    char offstr[16];
+
+    // Define a 1D array to store number of points on each processor
+    sprintf (datasetName, "mesh/npoints");
+    sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
+    sprintf (offstr,  "%d", Pstream::myProcNo());    // offsets of this process in the 1D array
+    adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+
+    /*
+    sprintf
+    (
+    		datasetName,
+    		"MESH/%s/processor%i/POINTS",
+    		mesh_.time().timeName().c_str(),
+    		Pstream::myProcNo()
+    );
+    */
+    sprintf (datasetName, "mesh/points");
+    sprintf (ldimstr, "%d,3", points.size()); // local dimension of the 2D sub-array (n points x 3 coordinates)
+    //sprintf (gdimstr, "%d,3", nTotalPoints);  // global dimension of the 2D array (N points x 3 coordinates)
+    //sprintf (offstr,  "%d,0", myoffset);      // offsets of this process in the 2D array
+    //adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, gdimstr, offstr);
+    adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, "", "");
+
+    // count the total size we are going to write from this process
+    outputSize_ += points.size() * 3 * sizeof(ioScalar);
+}
+
+
+void Foam::adiosWrite::meshDefineCells()
+{
+    Info<< "  meshDefineCells" << endl;
+
+
+    // Map shapes OpenFOAM->XDMF
+    Map<label> shapeLookupIndex;
+    shapeLookupIndex.insert(hexModel->index(), 9);
+    shapeLookupIndex.insert(prismModel->index(), 8);
+    shapeLookupIndex.insert(pyrModel->index(), 7);
+    shapeLookupIndex.insert(tetModel->index(), 6);
+
+
+    const cellList& cells  = mesh_.cells();
+    const cellShapeList& shapes = mesh_.cellShapes();
+
+
+    // Find dataset length for this process
+    // this will possible give a little overhead w.r.t. storage, but on a
+    // hex-dominated mesh, this is OK.
+    int j = 0;
+    forAll(cells, cellId)
+    {
+        const cellShape& shape = shapes[cellId];
+        label mapIndex = shape.model().index();
+
+        // A registered primitive type
+        if (shapeLookupIndex.found(mapIndex))
+        {
+            const labelList& vrtList = shapes[cellId];
+            j++; // one element for shapeID;
+            forAll(vrtList, i)
+            {
+                j++; // one element for each vertex of the cell (vrtList[i])
+            }
+        }
+
+        // If the cell is not a basic type, exit with an error
+        else
+        {
+            FatalErrorIn
+            (
+                "adiosWrite::meshWriteCells()"
+            )   << "Unsupported or unknown cell type for cell number "
+                << cellId << endl
+                << exit(FatalError);
+        }
+    }
+
+
+    // We don't need this: Find out how many points each process has
+    cellDataSizes_[Pstream::myProcNo()] = j;
+    //Pstream::gatherList(cellDataSizes_);
+    //Pstream::scatterList(cellDataSizes_);
+
+
+    // Create the different datasets (needs to be done collectively)
+    char datasetName[80];
+    char ldimstr[16];
+    char gdimstr[16];
+    char offstr[16];
+
+    // Define a 1D array to store number of cells of each processor
+    //sprintf (datasetName, "MESH/%s/nCells", mesh_.time().timeName().c_str());
+    sprintf (datasetName, "mesh/ncells");
+    sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
+    sprintf (offstr,  "%d", Pstream::myProcNo());      // offsets of this process in the 1D array
+    adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+
+    // Define a local 1D array for the Cell dataset for this process
+    /*sprintf
+        (
+            datasetName,
+            "MESH/%s/processor%i/CELLS",
+            mesh_.time().timeName().c_str(),
+            Pstream::myProcNo()
+        );
+    */
+    sprintf (datasetName, "mesh/cells");
+    sprintf (ldimstr, "%d", cellDataSizes_[Pstream::myProcNo()]);
+    adios_define_var (groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
+ }
+
+void Foam::adiosWrite::meshWritePoints()
+{   
+    Info<< "  meshWritePoints" << endl;
+    
+    const pointField& points = mesh_.points();
+    char datasetName[80];
+    
+    // Create a simple array of points (to pass on to adios_write)
+    ioScalar pointList[points.size()][3];
+    forAll(points, ptI)
+    {
+        pointList[ptI][0] = points[ptI].x();
+        pointList[ptI][1] = points[ptI].y();
+        pointList[ptI][2] = points[ptI].z();
+    }
+    
+    sprintf (datasetName, "mesh/npoints");
+    int n = points.size();
+    adios_write(fileID_, datasetName, &n);
+
+    // Select correct dataset for this process
+    /*sprintf
+        (
+            datasetName,
+            "MESH/%s/processor%i/POINTS",
+            mesh_.time().timeName().c_str(),
+            Pstream::myProcNo()
+        );*/
+    sprintf (datasetName, "mesh/points");
+    adios_write(fileID_, datasetName, pointList);
+}
+
+
+void Foam::adiosWrite::meshWriteCells()
+{
+    Info<< "  meshWriteCells" << endl;
+
+    // Map shapes OpenFOAM->XDMF
+    Map<label> shapeLookupIndex;
+    shapeLookupIndex.insert(hexModel->index(), 9);
+    shapeLookupIndex.insert(prismModel->index(), 8);
+    shapeLookupIndex.insert(pyrModel->index(), 7);
+    shapeLookupIndex.insert(tetModel->index(), 6);
+    
+    
+    const cellList& cells  = mesh_.cells();
+    const cellShapeList& shapes = mesh_.cellShapes();
+    
+    
+    // Find dataset length for this process and fill dataset in one operation
+    // this will possible give a little overhead w.r.t. storage, but on a 
+    // hex-dominated mesh, this is OK.
+    int j = 0;
+    int myDataset[9*cells.size()];
+    forAll(cells, cellId)
+    {
+        const cellShape& shape = shapes[cellId];
+        label mapIndex = shape.model().index();
+        
+        // A registered primitive type
+        if (shapeLookupIndex.found(mapIndex))
+        {
+            label shapeId = shapeLookupIndex[mapIndex];
+            const labelList& vrtList = shapes[cellId];
+            
+            myDataset[j] = shapeId; j++;
+            forAll(vrtList, i)
+            {
+                myDataset[j] = vrtList[i]; j++;
+            }
+        }
+        
+        // If the cell is not a basic type, exit with an error
+        else
+        {
+            FatalErrorIn
+            (
+                "adiosWrite::meshWriteCells()"
+            )   << "Unsupported or unknown cell type for cell number "
+                << cellId << endl
+                << exit(FatalError);
+        }
+    }
+    
+    
+    char datasetName[80];
+
+    sprintf (datasetName, "mesh/ncells");
+    adios_write (fileID_, datasetName, &cellDataSizes_[Pstream::myProcNo()]);
+
+    // Write a separate 1D array for the Cell dataset for this process
+    /*sprintf
+        (
+            datasetName,
+            "MESH/%s/processor%i/CELLS",
+            mesh_.time().timeName().c_str(),
+            Pstream::myProcNo()
+        );*/
+    sprintf (datasetName, "mesh/cells");
+    adios_write (fileID_, datasetName, myDataset);
+}
+
+
+const Foam::cellModel* Foam::adiosWrite::unknownModel = Foam::cellModeller::
+lookup
+(
+    "unknown"
+);
+
+
+const Foam::cellModel* Foam::adiosWrite::tetModel = Foam::cellModeller::
+lookup
+(
+    "tet"
+);
+
+
+const Foam::cellModel* Foam::adiosWrite::pyrModel = Foam::cellModeller::
+lookup
+(
+    "pyr"
+);
+
+
+const Foam::cellModel* Foam::adiosWrite::prismModel = Foam::cellModeller::
+lookup
+(
+    "prism"
+);
+
+
+const Foam::cellModel* Foam::adiosWrite::hexModel = Foam::cellModeller::
+lookup
+(
+    "hex"
+);
+
+// ************************************************************************* //

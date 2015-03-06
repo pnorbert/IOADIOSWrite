@@ -1,0 +1,8 @@
+adiosWrite/adiosWrite.C
+adiosWrite/adiosWriteFunctionObject.C
+adiosWrite/adiosWriteGrouping.C
+adiosWrite/adiosWriteField.C
+adiosWrite/adiosWriteMesh.C
+adiosWrite/adiosOps.C
+
+LIB = $(FOAM_USER_LIBBIN)/libIOadiosWrite
