@@ -61,7 +61,6 @@ void Foam::adiosWrite::open()
         sprintf(dataFile, "%s%i.bp", name_.c_str(), i);
     }
     
-    
     // Print info to terminal
     Info<< "  adiosWrite: Chosen filename " << dataFile << endl << endl;
     
@@ -74,7 +73,6 @@ void Foam::adiosWrite::open()
             << adios_get_last_errmsg();
         fileID_ = 0;
     }
-    
 }
 
 

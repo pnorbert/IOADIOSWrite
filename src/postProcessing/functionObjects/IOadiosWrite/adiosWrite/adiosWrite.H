@@ -128,7 +128,6 @@ protected:
             //- Write interval (in number of iterations)
             label writeInterval_;
         
-
         // Number of fields (vector, scalar) to write
         label nFields_;
         
@@ -141,12 +140,10 @@ protected:
         label nextWrite_;
         label timeSteps_;
 
-
         // ADIOS File and other identifiers
         int64_t  fileID_;     // file handler from open()
         int64_t  groupID_;    // group of output variables
         uint64_t outputSize_; // number of bytes we write in one timestep by the process
-        
         
         // Array containing number of cells per process (often used list)
         List<label> nCells_;
@@ -236,7 +233,6 @@ protected:
           // Write cells
           void meshWriteCells();
           
-
       // Miscallenous definitions
 
           //- Append fieldName to the appropriate group

@@ -83,7 +83,6 @@ Foam::adiosWrite::adiosWrite
         write();
     }
 
-
 }
 
 
