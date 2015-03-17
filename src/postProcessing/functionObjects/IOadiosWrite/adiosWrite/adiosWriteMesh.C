@@ -40,6 +40,7 @@ void Foam::adiosWrite::meshDefine()
     // Define time and time index as single scalar (written from rank 0)
     adios_define_var (groupID_, "mesh/time",    "", adios_integer, NULL, NULL, NULL);
     adios_define_var (groupID_, "mesh/timeidx", "", adios_integer, NULL, NULL, NULL);
+    outputSize_ += 2*4; // size of adios_integer
 
     // Define mesh
     meshDefinePoints();
@@ -102,6 +103,7 @@ void Foam::adiosWrite::meshDefinePoints()
     sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
     sprintf (offstr,  "%d", Pstream::myProcNo());    // offsets of this process in the 1D array
     adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+    outputSize_ += 4; // size of adios_integer
 
     /*
     sprintf
@@ -192,6 +194,7 @@ void Foam::adiosWrite::meshDefineCells()
     sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
     sprintf (offstr,  "%d", Pstream::myProcNo());      // offsets of this process in the 1D array
     adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+    outputSize_ += 4; // size of adios_integer
 
     // Define a local 1D array for the Cell dataset for this process
     /*sprintf
@@ -205,6 +208,7 @@ void Foam::adiosWrite::meshDefineCells()
     sprintf (datasetName, "mesh/cells");
     sprintf (ldimstr, "%d", cellDataSizes_[Pstream::myProcNo()]);
     adios_define_var (groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
+    outputSize_ += cellDataSizes_[Pstream::myProcNo()] * 4; // size of adios_integer
  }
 
 void Foam::adiosWrite::meshWritePoints()
@@ -295,7 +299,8 @@ void Foam::adiosWrite::meshWriteCells()
     char datasetName[80];
 
     sprintf (datasetName, "mesh/ncells");
-    adios_write (fileID_, datasetName, &cellDataSizes_[Pstream::myProcNo()]);
+    int s =  cellDataSizes_[Pstream::myProcNo()];
+    adios_write (fileID_, datasetName, &s);
 
     // Write a separate 1D array for the Cell dataset for this process
     /*sprintf

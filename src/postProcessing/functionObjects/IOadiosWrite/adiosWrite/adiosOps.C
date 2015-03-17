@@ -66,8 +66,12 @@ void Foam::adiosWrite::open()
     
     int err = adios_open (&fileID_, name_.c_str(), dataFile, mode, comm_); 
 
-    if (err)
+    if (!err)
     {
+        // Tell ADIOS how many bytes we are going to write in this step (by this process)
+        uint64_t total_size; // user data bytes + metadata, buffer size should be bigger
+        adios_group_size (fileID_, outputSize_, &total_size);
+    } else {
         WarningIn ("Foam::adiosWrite::open()")  << "File " << name_.c_str()
             << " could not be created: " << nl 
             << adios_get_last_errmsg();

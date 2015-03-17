@@ -1,7 +1,7 @@
 sinclude $(GENERAL_RULES)/mplib$(WM_MPLIB)
 sinclude $(RULES)/mplib$(WM_MPLIB)
 
-ADIOS_INC  := -I${ADIOS_DIR}/include
+ADIOS_INC  := -I${ADIOS_DIR}/include -g -O0
 ADIOS_LIBS := ${shell ${ADIOS_DIR}/bin/adios_config -l}
 
 EXE_INC = -DWRITE_SP \

@@ -157,7 +157,7 @@ protected:
         MPI_Comm comm_; // Pstream:: does not provide communicator
         // rank = Pstream::myProcNo()
         // number of processors = Pstream::nProcs()
-        // process id: Pstream::procID (int procNo)
+        // process id: Pstream::procID (int procNo), 1 for rank 0
             
 
     // Private Member Functions

@@ -151,6 +151,10 @@ void Foam::adiosWrite::read(const dictionary& dict)
             << ". It should be > 0."
             << exit(FatalIOError);
     }
+
+    Info<< type() << " " << name() << ":" << endl
+        << "  ADIOS output method: " << adiosMethod_ << endl 
+        << "      with parameters: " << methodParams_ << endl;
 }
 
 
@@ -201,14 +205,31 @@ void Foam::adiosWrite::write()
 {
     Info<< "adiosWrite::write() has been called at time " << obr_.time().timeName() << endl;
     // Check if we are going to write
-    if ( timeSteps_ == 0 )
-    //if ( timeSteps_ == nextWrite_ )
+    //if ( timeSteps_ == 0 )
+    if ( timeSteps_ == nextWrite_ )
     {
         // Write info to terminal
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
         if (timeSteps_ == 0)
         {
+
+            /* FIXME: code snippet to wait gdb attach on rank 0 process */
+            /*
+            Info<< "Pstream::myProcNo() = " << Pstream::myProcNo() << endl;
+            if (Pstream::myProcNo() == 0) 
+            {
+                int z = 0;
+                char hostname[256];
+                gethostname(hostname, sizeof(hostname));
+                int pid = getpid();
+                WarningIn ("Foam::adiosWrite::write()")  << 
+                    "PID " << pid << " on " << hostname << " ready for attach\n" << endl;
+                while (0 == z)
+                    sleep(5);
+            }
+            */
+        
             // ADIOS requires to define all variables before writing anything
             Info<< "Define variables in ADIOS" << endl;
             defineVars();
@@ -221,7 +242,7 @@ void Foam::adiosWrite::write()
             defineVars();
         }
 
-        // Create/reopen ADIOS output file
+        // Create/reopen ADIOS output file, and tell ADIOS how man bytes we are going to write
         open();
 
         // Only write field data if fields are specified
@@ -234,7 +255,7 @@ void Foam::adiosWrite::write()
             }
             
             // Write field data
-            //fieldWrite();
+            fieldWrite();
         }
         
         // Only write cloud data if any clouds is specified
@@ -243,7 +264,7 @@ void Foam::adiosWrite::write()
             cloudWrite();
         }
         
-        // Close the ADIOS dataset at every timestep
+        // Close the ADIOS dataset at every timestep. It must be closed!
         // Data is flushed from memory at this point
         close();
         
