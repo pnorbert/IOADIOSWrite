@@ -131,12 +131,21 @@ void Foam::adiosWrite::fieldWriteScalar()
         /* FIXME: if we can get the field.xxxx as the double/float array
          * then there is no need for this element-by-element copy
          */
-        
-        // Loop through the field and construct the array
-        forAll(field, iter)
-        {
-            scalarData[iter] = field[iter];
-        }
+        //if (field.contiguous()) 
+        //{
+           memcpy (scalarData,  
+                   reinterpret_cast<const char *>(field.cdata()),
+                   field.byteSize()
+                  );
+        //}
+        //else
+        //{
+        //    // Loop through the field and construct the array
+        //    forAll(field, iter)
+        //    {
+        //        scalarData[iter] = field[iter];
+        //    }
+        //}
 
         char datasetName[80];
         // dataset for this process

@@ -45,6 +45,7 @@ void Foam::adiosWrite::meshDefine()
     // Define mesh
     meshDefinePoints();
     meshDefineCells();
+    //meshDefineBoundaries();
     
     Info<< endl;
 }
@@ -66,6 +67,7 @@ void Foam::adiosWrite::meshWrite()
     meshWritePoints();
     meshWriteCells();
     
+
     Info<< endl;
 }
 
@@ -210,6 +212,34 @@ void Foam::adiosWrite::meshDefineCells()
     adios_define_var (groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
     outputSize_ += cellDataSizes_[Pstream::myProcNo()] * 4; // size of adios_integer
  }
+
+void Foam::adiosWrite::meshDefineBoundaries()
+{
+    /*
+    Info<< "  meshDefineBoundaries" << endl;
+    const polyPatchList& patches = mesh_.boundaryMesh();
+
+    Info<< "----------------" << nl
+        << "Patches" << nl
+        << "----------------" << nl;
+
+    forAll(patches, patchI)
+    {
+        const polyPatch& p = patches[patchI];
+        const polyBoundaryMesh& b = p.boundaryMesh();
+        const polyMesh& m = b.mesh();
+        const cellList& cells  = m.cells();
+        const cellShapeList& shapes = m.cellShapes();
+
+        Info<< "  " << "patch " << patchI
+            << " (start: " << p.start()
+            << " size: " << p.size()
+            << ") name: " << p.name()
+            << nl;
+    }
+    */
+}
+
 
 void Foam::adiosWrite::meshWritePoints()
 {   

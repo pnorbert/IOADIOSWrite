@@ -44,6 +44,7 @@ Author
 
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
+#include "fvMesh.H"
 
 #include "adios.h"
 #include <stdio.h> // sprintf
@@ -69,7 +70,7 @@ namespace Foam
 // Forward declaration of classes
 class objectRegistry;
 class dictionary;
-class fvMesh;
+//class fvMesh;
 
 /*---------------------------------------------------------------------------*\
                          Class adiosWrite Declaration
@@ -223,6 +224,9 @@ protected:
 
           // Define cells
           void meshDefineCells();
+
+          // Define Boundary meshes
+          void meshDefineBoundaries();
 
           // Mesh write wrapper
           void meshWrite();
