@@ -127,14 +127,20 @@ void Foam::adiosWrite::fieldWriteScalar()
         
         // Initialize a plain continuous array for the data
         ioScalar* scalarData;
-        scalarData = new ioScalar[field.size()];
+        // This does not work since adios_write() cannot accept const void *
+        //scalarData = reinterpret_cast<ioScalar*>(field.internalField().cdata());
+
         /* FIXME: if we can get the field.xxxx as the double/float array
          * then there is no need for this element-by-element copy
          */
-        //if (field.contiguous()) 
+        scalarData = new ioScalar[field.size()];
+        //if (contiguous("Type of field which is a templated class' object"))  //
         //{
+            // This only works as long as the field's type is the same as ioScalar
+            // i.e. float or double depending on the WM_DP compile flag
            memcpy (scalarData,  
-                   reinterpret_cast<const char *>(field.cdata()),
+                   //reinterpret_cast<const char *>(field.cdata()),
+                   reinterpret_cast<const char *>(field.internalField().cdata()),
                    field.byteSize()
                   );
         //}
@@ -183,15 +189,27 @@ void Foam::adiosWrite::fieldWriteVector()
         ioScalar* vectorData;
         vectorData = new ioScalar[field.size()*3];
         
+        //Info<< "      vector size = " << field.size() 
+        //    << "  byte size = " << field.byteSize() << endl;
         
+        //if (field.contiguous()) 
+        //{
+           memcpy (vectorData,  
+                   //reinterpret_cast<const char *>(field.cdata()),
+                   reinterpret_cast<const char *>(field.internalField().cdata()),
+                   field.byteSize()
+                  );
+        //}
+        //else
+        //{
         // Loop through the field and construct the array
-        forAll(field, iter)
-        {
-            vectorData[3*iter+0] = field[iter].x();
-            vectorData[3*iter+1] = field[iter].y();
-            vectorData[3*iter+2] = field[iter].z();
-        }
-        
+        //forAll(field, iter)
+        //{
+        //    vectorData[3*iter+0] = field[iter].x();
+        //    vectorData[3*iter+1] = field[iter].y();
+        //    vectorData[3*iter+2] = field[iter].z();
+        //}
+        //}
         
         // Create the different datasets (needs to be done collectively)
         char datasetName[80];
