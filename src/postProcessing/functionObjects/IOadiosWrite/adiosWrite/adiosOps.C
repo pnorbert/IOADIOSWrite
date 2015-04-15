@@ -34,19 +34,24 @@ void Foam::adiosWrite::open()
     Info<< "adiosWrite::open:" << endl;
     
     
-    // Create directory if nonexisting
-    //if (!isDir("adiosData"))
-    //{
-    //  mkDir("adiosData");
-    //}
+    // Create output directory if nonexisting in the beginning
+    static bool checkdir = true;
+    if (checkdir && !isDir("adiosData"))
+    {
+        mkDir("adiosData");
+    }
+    checkdir = false;
     
     
     // Find and create filename
     char dataFile[80];
-    int i = 0;
     char mode[] = "w";
+    
+    sprintf(dataFile, "adiosData/%s.bp", obr_.time().timeName().c_str());
 
     // Create/open a new file collectively.
+    /*
+    static int i = 0;
     if (timeSteps_ == 0) {
         mode[0] = 'w';
         do
@@ -60,7 +65,8 @@ void Foam::adiosWrite::open()
         mode[0] = 'a';
         sprintf(dataFile, "%s%i.bp", name_.c_str(), i);
     }
-    
+    */
+
     // Print info to terminal
     Info<< "  adiosWrite: Chosen filename " << dataFile << endl << endl;
     
