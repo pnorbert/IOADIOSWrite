@@ -73,6 +73,39 @@ void Foam::adiosWrite::fieldDefineScalar()
 
         // count the total size we are going to write from this process
         outputSize_ += field.size() * sizeof(ioScalar);
+
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvPatchScalarField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI 
+                << ": name=" << pf1.patch().name() 
+                << ": type=" << pf1.type() 
+                << " empty=" << pf1.empty() 
+                << " size=" << pf1.size() 
+                << endl;
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (datasetName, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
+            sprintf (dimstr, "%d", pf1.size()); // global and local dimension of the 1D array
+            adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
+
+            // define attributes to describe this patch
+            char pathstr[128];
+            char tmpstr[128];
+            sprintf (pathstr, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
+            sprintf (tmpstr, "%s", pf1.patch().name().c_str());
+            adios_define_attribute (groupID_, "name", pathstr, adios_string, tmpstr, NULL);
+            sprintf (tmpstr, "%s", pf1.type().c_str());
+            adios_define_attribute (groupID_, "type", pathstr, adios_string, tmpstr, NULL);
+
+            // count the total size we are going to write from this process
+            outputSize_ += pf1.size() * sizeof(ioScalar);
+
+            //forAll(pf1, faceI)
+            // {
+            //     pf1[faceI] = ...
+            // }
+        }
+
     }
 }
 
@@ -136,6 +169,7 @@ void Foam::adiosWrite::fieldWriteScalar()
         scalarData = new ioScalar[field.size()];
         //if (contiguous("Type of field which is a templated class' object"))  //
         //{
+            // adios_write() does not accept const void * arrays, so we need to copy the cdata here 
             // This only works as long as the field's type is the same as ioScalar
             // i.e. float or double depending on the WM_DP compile flag
            memcpy (scalarData,  
@@ -167,9 +201,27 @@ void Foam::adiosWrite::fieldWriteScalar()
 
         // Do the actual write
         adios_write (fileID_, datasetName, scalarData);
+        //adios_write (fileID_, datasetName, reinterpret_cast<void *>(field.internalField().data());
 
         // Release memory
         delete [] scalarData;
+
+
+        // Do the same for all patches
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvPatchScalarField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI << ":" << endl;
+            scalarData = new ioScalar[field.size()];
+            memcpy (scalarData,  
+                    reinterpret_cast<const char *>(pf1.internalField().cdata()),
+                    pf1.byteSize()
+                   );
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (datasetName, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
+            adios_write (fileID_, datasetName, scalarData);
+            delete [] scalarData;
+        }
     }
 }
 
