@@ -261,6 +261,7 @@ protected:
       static const cellModel* pyrModel;
       static const cellModel* prismModel;
       static const cellModel* hexModel;
+      static const cellModel* wedgeModel;
 
 
 public:

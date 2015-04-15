@@ -139,6 +139,8 @@ void Foam::adiosWrite::meshDefineCells()
     shapeLookupIndex.insert(prismModel->index(), 8);
     shapeLookupIndex.insert(pyrModel->index(), 7);
     shapeLookupIndex.insert(tetModel->index(), 6);
+    shapeLookupIndex.insert(wedgeModel->index(), 5);
+    shapeLookupIndex.insert(unknownModel->index(), 0);
 
 
     const cellList& cells  = mesh_.cells();
@@ -153,6 +155,13 @@ void Foam::adiosWrite::meshDefineCells()
     {
         const cellShape& shape = shapes[cellId];
         label mapIndex = shape.model().index();
+    
+        Info<< "  cell ID = " << cellId << " index = " << mapIndex
+            << ". Shape name = " << shape.model().name()
+            << ". Shape nPoints = " << shape.model().nPoints()
+            << ". Shape nEdges = " << shape.model().nEdges()
+            << ". Shape nFaces = " << shape.model().nFaces()
+            << endl;
 
         // A registered primitive type
         if (shapeLookupIndex.found(mapIndex))
@@ -165,14 +174,22 @@ void Foam::adiosWrite::meshDefineCells()
             }
         }
 
+        // If the cell is empty, leave it alone
+        // FIXME: I have no idea if it's okay to ignore it
+        //else if  (shape.model().nPoints()==0) {
+        //    Info<< "  empty cell ignored, id=" << cellId << endl;
+        //}
         // If the cell is not a basic type, exit with an error
         else
         {
+            //j++; // we will add a 0 type and no vertices to continue
+            //continue;
             FatalErrorIn
             (
                 "adiosWrite::meshWriteCells()"
             )   << "Unsupported or unknown cell type for cell number "
-                << cellId << endl
+                << cellId 
+                << endl
                 << exit(FatalError);
         }
     }
@@ -284,6 +301,8 @@ void Foam::adiosWrite::meshWriteCells()
     shapeLookupIndex.insert(prismModel->index(), 8);
     shapeLookupIndex.insert(pyrModel->index(), 7);
     shapeLookupIndex.insert(tetModel->index(), 6);
+    shapeLookupIndex.insert(wedgeModel->index(), 5);
+    shapeLookupIndex.insert(unknownModel->index(), 0);
     
     
     const cellList& cells  = mesh_.cells();
@@ -316,12 +335,16 @@ void Foam::adiosWrite::meshWriteCells()
         // If the cell is not a basic type, exit with an error
         else
         {
+            //myDataset[j] = 0; j++;
+            //continue;
+            
             FatalErrorIn
             (
                 "adiosWrite::meshWriteCells()"
             )   << "Unsupported or unknown cell type for cell number "
                 << cellId << endl
                 << exit(FatalError);
+            
         }
     }
     
@@ -377,6 +400,12 @@ const Foam::cellModel* Foam::adiosWrite::hexModel = Foam::cellModeller::
 lookup
 (
     "hex"
+);
+
+const Foam::cellModel* Foam::adiosWrite::wedgeModel = Foam::cellModeller::
+lookup
+(
+    "wedge"
 );
 
 // ************************************************************************* //
