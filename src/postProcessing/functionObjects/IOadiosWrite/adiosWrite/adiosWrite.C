@@ -47,10 +47,12 @@ Foam::adiosWrite::adiosWrite
 :
     name_(name),
     obr_(obr),
-    mesh_(refCast<const fvMesh>(obr))
+    primaryMesh_(refCast<const fvMesh>(obr)),
+    time_(primaryMesh_.time())
 {
     Info<< "adiosWrite constructor called " << endl;
     MPI_Comm_dup (MPI_COMM_WORLD, &comm_);
+
 
     // Initilize ADIOS
     adios_init_noxml (comm_);
@@ -64,25 +66,15 @@ Foam::adiosWrite::adiosWrite
     // Read dictionary
     read(dict);
     
-    // Classify fields
-    nFields_ = classifyFields();
+    // Classify fields for all regions
+    classifyFields();
     
-    // Set length of cell numbers array
-    nCells_.setSize(Pstream::nProcs());
-    // Set length of cell data size array
-    cellDataSizes_.setSize(Pstream::nProcs());
-
     // Set the actual output method here for the ADIOS group
     adios_select_method (groupID_, adiosMethod_.c_str(), methodParams_.c_str(), "");
     adios_allocate_buffer (ADIOS_BUFFER_ALLOC_NOW, 10);
 
-    // Only do if some fields are to be written
-    if (nFields_ || cloudNames_.size())
-    {
-        // Write initial conditions (including mesh)
-        write();
-    }
-
+    // Write initial conditions (including mesh)
+    write();
 }
 
 
@@ -97,13 +89,114 @@ Foam::adiosWrite::~adiosWrite()
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
+void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& r)
+{
+    Info<< " Region dict: " << r.name_ << endl;
+    wordList toc_ (dict.toc());
+    forAll(toc_, j)
+    {
+        Info<< "   TOC "<< j<<": " << toc_[j] << endl;
+    }
+    Info<< endl;
+    dict.lookup("objectNames")  >> r.objectNames_;
+    dict.lookup("cloudNames")   >> r.cloudNames_;
+    dict.lookup("cloudAttribs") >> r.cloudAttribs_;
+
+    // Set length of cell numbers array
+    r.nCells_.setSize(Pstream::nProcs());
+    // Set length of cell data size array
+    r.cellDataSizes_.setSize(Pstream::nProcs());
+
+    // Do a basic check to see if the objectNames_ is accessible
+    forAll(r.objectNames_, j)
+    {
+        if (obr_.foundObject<regIOobject>(r.objectNames_[j]))
+        {
+            Info<< " " << r.objectNames_[j];
+        }
+        else
+        {
+            WarningIn
+                (
+                 "Foam::adiosWrite::read(const dictionary&)"
+                )   << "Object " << r.objectNames_[j] << " not found in "
+                << "database. Available objects:" << nl << obr_.sortedToc()
+                << endl;
+        }
+
+    }
+
+    // Also print the cloud names
+    forAll(r.cloudNames_, j)
+    {
+        Info<< " " << r.cloudNames_[j];
+    }
+    Info<< endl << endl;
+}
+
 void Foam::adiosWrite::read(const dictionary& dict)
 {
+    wordList toc_ (dict.toc());
+    forAll(toc_, i)
+    {
+        Info<< " TOC "<< i<<": " << toc_[i] << endl;
+    }
+    Info<< endl << endl;
+
+    /* Get the list of regions in adiosDict (as name list and dictionary list) */
+    const entry* entryPtr = dict.lookupEntryPtr ("regions", false, false);
+    if (entryPtr)
+    {
+        if (!entryPtr->isDict()) 
+        {
+            // a list of functionObjects
+            PtrList<entry> r(entryPtr->stream());
+            regions_.setSize(r.size());
+            label nr = 0;
+            forAllIter(PtrList<entry>, r, iter)
+            {
+                // safety:
+                if (!iter().isDict())
+                {
+                    WarningIn ( "Foam::adiosWrite::read(const dictionary&)")   
+                        << "Regions list should only contain dictionaries," 
+                        << "one per region."
+                        << endl;
+                    continue;
+                }
+                //const word& key = iter().keyword();
+                const dictionary& d = iter().dict();
+                regions_[nr].name_ = iter().keyword();
+
+                //regions_[nr].mesh_ = obr_.foundObject<fvMesh>(iter().keyword());
+                //const fvMesh& m = time_.lookupObject<fvMesh>(iter().keyword());
+
+                /* Process the dictionary here because we can't save the reference
+                   into a list for later processing */
+                /* Process each region, which should contain the fields and particles */
+
+                read_region (d, regions_[nr]);
+                nr++;
+            }
+        }
+        else 
+        {
+            FatalIOErrorIn("Foam::adiosWrite::read(const dictionary&)", dict)
+                << "List of regions should not be a dictionary but a list. "
+                << exit(FatalIOError);
+        }
+    }
+    else
+    {
+        FatalIOErrorIn("adiosWrite::read(const dictionary&)", dict)
+            << "List of regions is required in adiosData in controlDict. "
+            << exit(FatalIOError);
+    }
+
+
+
     // Lookup in dictionary
-    dict.lookup("objectNames") >> objectNames_;
-    dict.lookup("cloudNames") >> cloudNames_;
-    dict.lookup("cloudAttribs") >> cloudAttribs_;
-    dict.lookup("writeInterval") >> writeInterval_;
+    writeInterval_ = dict.lookupOrDefault<label>("writeInterval", 1);
     
     // Lookup chunk size if present
     adiosMethod_  = dict.lookupOrDefault<word>("adiosMethod", "MPI");
@@ -113,35 +206,8 @@ void Foam::adiosWrite::read(const dictionary& dict)
     int writeprec = sizeof(ioScalar);
     Info<< type() << " " << name() << ":" << endl
         << "  Compiled with " << writeprec << " bytes precision." << endl
-        << "  writing every " << writeInterval_ << " iterations:"
-        << endl
-        << "   ";
+        << "  writing every " << writeInterval_ << " iterations:" << endl;
     
-    // Do a basic check to see if the objectNames_ is accessible
-    forAll(objectNames_, i)
-    {
-        if (obr_.foundObject<regIOobject>(objectNames_[i]))
-        {
-            Info<< " " << objectNames_[i];
-        }
-        else
-        {
-            WarningIn
-            (
-                "Foam::writeRegisteredObject::read(const dictionary&)"
-            )   << "Object " << objectNames_[i] << " not found in "
-                << "database. Available objects:" << nl << obr_.sortedToc()
-                << endl;
-        }
-
-    }
-    
-    // Also print the cloud names
-    forAll(cloudNames_, i)
-    {
-      Info<< " " << cloudNames_[i];
-    }
-    Info<< endl << endl;
     
     // Check if writeInterval is a positive number
     if (writeInterval_ <= 0)
@@ -183,13 +249,16 @@ void Foam::adiosWrite::defineVars()
 {
     Info<< "adiosWrite::defineVars() has been called at time " << obr_.time().timeName() << endl;
     outputSize_ = 0;
-    if (nFields_)
+
+    // define some info scalars: number of regions
+    adios_define_var (groupID_, "nregions", "", adios_integer, NULL, NULL, NULL);
+    outputSize_ += 4;
+
+    forAll(regions_, regionID)
     {
-        meshDefine();
-        fieldDefine();
-    }
-    if (cloudNames_.size()) {
-        cloudDefine();
+        meshDefine(regionID); 
+        fieldDefine(regionID);
+        //cloudDefine(regionID);
     }
 }
 
@@ -234,10 +303,10 @@ void Foam::adiosWrite::write()
             Info<< "Define variables in ADIOS" << endl;
             defineVars();
         }
-        else if (mesh_.changing())
+        else if (primaryMesh_.changing())
         {
             // Re-define all variables if mesh has changed (due to variable sizes change)
-            Info<< "Redefine all variables in ADIOS because mesh has changed at time " << obr_.time().timeName() << endl;
+            Info<< "Redefine all variables in ADIOS because primary mesh has changed at time " << obr_.time().timeName() << endl;
             deleteDefinitions();
             defineVars();
         }
@@ -245,25 +314,24 @@ void Foam::adiosWrite::write()
         // Create/reopen ADIOS output file, and tell ADIOS how man bytes we are going to write
         open();
 
-        // Only write field data if fields are specified
-        if (nFields_)
+        int n = regions_.size();
+        adios_write (fileID_, "nregions", &n);
+
+        forAll(regions_, regionID)
         {
             // Re-write mesh if dynamic or first time
-            if (timeSteps_ == 0 || mesh_.changing())
+            if (timeSteps_ == 0 || primaryMesh_.changing())
             {
-                meshWrite();
+                meshWrite(regionID); 
             }
-            
+
             // Write field data
-            fieldWrite();
+            fieldWrite(regionID);
+
+            // Write cloud data 
+            //cloudWrite(regionID);
         }
-        
-        // Only write cloud data if any clouds is specified
-        if (cloudNames_.size())
-        {
-            cloudWrite();
-        }
-        
+
         // Close the ADIOS dataset at every timestep. It must be closed!
         // Data is flushed from memory at this point
         close();

@@ -45,6 +45,7 @@ Author
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
 #include "fvMesh.H"
+//#include "regionInfo.H" // local class in adiosWrite for per-region info
 
 #include "adios.h"
 #include <stdio.h> // sprintf
@@ -95,6 +96,41 @@ protected:
             {}
 
         };
+
+        // per-region info variables grouped together to be able to create a list of them
+        class regionInfo 
+        {
+        public:
+            regionInfo() {} ;
+            ~regionInfo() {};
+
+            word name_;
+
+            //- Const reference to fvMesh
+            //const fvMesh& mesh_;
+            //fvMesh& mesh_;
+
+            //- Names of volume fields per region to write
+            wordReList objectNames_;
+
+            //- Names of clouds to write
+            wordReList cloudNames_;
+
+            //- Which attributes to write for particle data
+            wordReList cloudAttribs_;
+
+            // Categorized scalar/vector/tensor fields
+            fieldGroup<scalar> scalarFields_;
+            fieldGroup<vector> vectorFields_;
+
+            // Array containing number of cells per process (often used list)
+            List<label> nCells_;
+
+            // number of data points in output Cell array on each process
+            //   calculated in meshDefineCells, used in meshWriteCells
+            //   only the local size is used currently
+            List<label> cellDataSizes_;
+        };
     
     
     // Private data
@@ -102,41 +138,29 @@ protected:
         //- Name of this set of adiosWrite
         word name_;
         
-        // Current object registry
+        // Reference to the object registry
         const objectRegistry& obr_;
-        
-        //- Const reference to fvMesh
-        const fvMesh& mesh_;
 
+        //- Reference to the primary mesh database
+        const fvMesh& primaryMesh_; //  primaryMesh_(refCast<const fvMesh>(obr)) 
+
+        //- Reference to the time database
+        const Time& time_;  // = primaryMesh_.time()
+
+        //- List of regions holding all data needed (mesh, names)
+        List<regionInfo> regions_; 
 
         // Read from dictionary
-
-            //- Names of volume fields to write
-            wordReList objectNames_;
             
-            //- Names of clouds to write
-            wordReList cloudNames_;
-            
-            //- Which attributes to write for particle data
-            wordReList cloudAttribs_;
-            
-            //- ADIOS I/O method to use
-            word adiosMethod_;
+        //- ADIOS I/O method to use
+        word adiosMethod_;
 
-            //- ADIOS I/O method parameters
-            string methodParams_;
+        //- ADIOS I/O method parameters
+        string methodParams_;
 
-            //- Write interval (in number of iterations)
-            label writeInterval_;
-        
-        // Number of fields (vector, scalar) to write
-        label nFields_;
-        
-        // Categorized scalar/vector/tensor fields
-        fieldGroup<scalar> scalarFields_;
-        fieldGroup<vector> vectorFields_;
-        
-        
+        //- Write interval (in number of iterations)
+        label writeInterval_;
+
         // Used to track when to write
         label nextWrite_;
         label timeSteps_;
@@ -146,13 +170,6 @@ protected:
         int64_t  groupID_;    // group of output variables
         uint64_t outputSize_; // number of bytes we write in one timestep by the process
         
-        // Array containing number of cells per process (often used list)
-        List<label> nCells_;
-
-        // number of data points in output Cell array on each process
-        //   calculated in meshDefineCells, used in meshWriteCells
-        //   only the local size is used currently
-        List<label> cellDataSizes_;
             
         // MPI parallel code variables
         MPI_Comm comm_; // Pstream:: does not provide communicator
@@ -176,31 +193,31 @@ protected:
       // Functions for handling field data
           
           // Field define wrapper
-          void fieldDefine();
+          void fieldDefine (label regionID);
 
           // Write scalar data
-          void fieldDefineScalar();
+          void fieldDefineScalar (label regionID);
 
           // Write vector data
-          void fieldDefineVector();
+          void fieldDefineVector (label regionID);
 
           // Field write wrapper
-          void fieldWrite();
+          void fieldWrite (label regionID);
           
           // Write scalar data
-          void fieldWriteScalar();
+          void fieldWriteScalar (label regionID);
           
           // Write vector data
-          void fieldWriteVector();
+          void fieldWriteVector (label regionID);
       
       
       // Functions for handling particle cloud data
           
           // Cloud define wrapper
-          void cloudDefine();
+          void cloudDefine (label regionID);
 
           // Cloud write wrapper
-          void cloudWrite();
+          void cloudWrite (label regionID);
           
           // Write attributes for cloud particles
           void cloudWriteAttrib
@@ -217,33 +234,37 @@ protected:
       // Functions for handling mesh 
       
           // Mesh define wrapper
-          void meshDefine();
+          void meshDefine(label regionID);
 
           // Define points
-          void meshDefinePoints();
+          void meshDefinePoints(const fvMesh& m, label regionID);
 
           // Define cells
-          void meshDefineCells();
+          void meshDefineCells(const fvMesh& m, label regionID);
 
           // Define Boundary meshes
-          void meshDefineBoundaries();
+          void meshDefineBoundaries(const fvMesh& m, label regionID);
 
           // Mesh write wrapper
-          void meshWrite();
+          void meshWrite(label regionID);
           
           // Write points
-          void meshWritePoints();
+          void meshWritePoints(const fvMesh& m, label regionID);
           
           // Write cells
-          void meshWriteCells();
+          void meshWriteCells(const fvMesh& m, label regionID);
           
       // Miscallenous definitions
 
+          // Read info for one region from it's own dictionary
+          void read_region(const dictionary& dict, regionInfo& r);
+
           //- Append fieldName to the appropriate group
-          label appendFieldGroup(const word& fieldName, const word& fieldType);
+          label appendFieldGroup(regionInfo& r, const word& fieldName, const word& fieldType);
 
           //- Classify field types, returns the number of fields
           label classifyFields();
+          void test_print_obr();
           
           //- Disallow default bitwise copy construct
           adiosWrite(const adiosWrite&);

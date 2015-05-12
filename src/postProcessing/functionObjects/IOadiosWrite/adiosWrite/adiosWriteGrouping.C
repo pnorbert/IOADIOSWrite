@@ -30,57 +30,84 @@ License
 
 Foam::label Foam::adiosWrite::appendFieldGroup
 (
+    regionInfo& r,
     const word& fieldName,
     const word& fieldType
 )
 {
     if (fieldType == volScalarField::typeName)
     {
-        scalarFields_.append(fieldName);
+        r.scalarFields_.append(fieldName);
         return 1;
     }
     else if (fieldType == volVectorField::typeName)
     {
-        vectorFields_.append(fieldName);
+        r.vectorFields_.append(fieldName);
         return 1;
     }
     else if (fieldType == volSphericalTensorField::typeName)
     {
-        //sphericalTensorFields_.append(fieldName);
+        //r.sphericalTensorFields_.append(fieldName);
         return 0;
     }
     else if (fieldType == volSymmTensorField::typeName)
     {
-        //symmTensorFields_.append(fieldName);
+        //r.symmTensorFields_.append(fieldName);
         return 0;
     }
     else if (fieldType == volTensorField::typeName)
     {
-        //tensorFields_.append(fieldName);
+        //r.tensorFields_.append(fieldName);
         return 0;
     }
 
     return 0;
 }
 
+void Foam::adiosWrite::test_print_obr()
+{
+    Info<< "adiosWrite objectRegistry list: " << endl;
+    wordList allFields = obr_.sortedNames();
+    forAll(regions_, i)
+    {
+        regionInfo& r = regions_[i];
+        labelList indices = findStrings(r.objectNames_, allFields);
+        forAll(indices, fieldI)
+        {
+            const word& name = allFields[indices[fieldI]];
+            const word& type = obr_.find(name)()->type();
+            Info<< "  name = " << name << "  type = " << type << endl;
+
+        }
+    }
+}
 
 Foam::label Foam::adiosWrite::classifyFields()
 {
     label nFields = 0;
     
+    test_print_obr();
+
+    Info<< endl << "Foam::adiosWrite::classifyFields: " << endl;
     // Check currently available fields
-    wordList allFields = mesh_.sortedNames();
-    labelList indices = findStrings(objectNames_, allFields);
 
-    forAll(indices, fieldI)
+    forAll(regions_, regionI)
     {
-        const word& fieldName = allFields[indices[fieldI]];
+        regionInfo& r = regions_[regionI];
+        Info<< "  region " << regionI << " " << r.name_ << ": " << endl;
 
-        nFields += appendFieldGroup
-        (
-            fieldName,
-            mesh_.find(fieldName)()->type()
-        );
+        const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+        wordList allFields = mesh.sortedNames();
+        labelList indices = findStrings(r.objectNames_, allFields);
+
+        forAll(indices, fieldI)
+        {
+            const word& fieldName = allFields[indices[fieldI]];
+            const word& type = mesh.find(fieldName)()->type();
+
+            Info<< "    name = " << fieldName << "  type = " << type << endl;
+            nFields += appendFieldGroup (r, fieldName, type);
+        }
     }
 
     return nFields;

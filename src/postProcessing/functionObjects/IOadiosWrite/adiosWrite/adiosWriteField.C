@@ -27,32 +27,39 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void Foam::adiosWrite::fieldDefine()
+void Foam::adiosWrite::fieldDefine(label regionID)
 {
-    Info<< "  adiosWrite::fieldDefine:"  << endl;
-    fieldDefineScalar();
-    fieldDefineVector();
+    char tmpstr[128];
+    Info<< "  adiosWrite::fieldDefine: region " << regionID << " " << regions_[regionID].name_ << ": " << endl;
+    sprintf (tmpstr, "region%d", regionID);
+    adios_define_attribute (groupID_, "name", tmpstr, adios_string, regions_[regionID].name_.c_str(), NULL);
+
+    fieldDefineScalar(regionID);
+    fieldDefineVector(regionID);
 }
 
-void Foam::adiosWrite::fieldWrite()
+void Foam::adiosWrite::fieldWrite(label regionID)
 {
-    Info<< "  adiosWrite::fieldWrite:"  << endl;
-    fieldWriteScalar();
-    fieldWriteVector();
+    Info<< "  adiosWrite::fieldWrite: region " << regionID << " " << regions_[regionID].name_ << ": " << endl;
+    fieldWriteScalar(regionID);
+    fieldWriteVector(regionID);
 }
 
-void Foam::adiosWrite::fieldDefineScalar()
+void Foam::adiosWrite::fieldDefineScalar(label regionID)
 {
-    char datasetName[128];
+    char datasetName[256];
+    char patchName[256];
     char dimstr[16];
-    forAll(scalarFields_, fieldI)
+    const fieldGroup<scalar>& fields (regions_[regionID].scalarFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
     {
-        Info<< "    fieldDefineScalar: " << scalarFields_[fieldI] << endl;
+        Info<< "    fieldDefineScalar: " << fields[fieldI] << endl;
 
         // Lookup field
-        const volScalarField& field = obr_.lookupObject<volScalarField>
+        const volScalarField& field = m.lookupObject<volScalarField>
             (
-                scalarFields_[fieldI]
+                fields[fieldI]
             );
 
         /*sprintf
@@ -61,9 +68,9 @@ void Foam::adiosWrite::fieldDefineScalar()
                 "FIELDS/%s/processor%i/%s",
                 mesh_.time().timeName().c_str(),
                 Pstream::myProcNo(),
-                scalarFields_[fieldI].c_str()
+                fields[fieldI].c_str()
             );*/
-        sprintf (datasetName, "fields/%s", scalarFields_[fieldI].c_str());
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
 
         // Define a 1D array with field.size as global size, and 
         //   local (this process') size and with offset 0, 
@@ -84,18 +91,18 @@ void Foam::adiosWrite::fieldDefineScalar()
                 << " size=" << pf1.size() 
                 << endl;
             // FIXME: what's the name of pf1 in the output?
-            sprintf (datasetName, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
             sprintf (dimstr, "%d", pf1.size()); // global and local dimension of the 1D array
-            adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
+            adios_define_var (groupID_, patchName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
 
             // define attributes to describe this patch
-            char pathstr[128];
+            //char pathstr[128];
             char tmpstr[128];
-            sprintf (pathstr, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
+            //sprintf (pathstr, "fields/%s/patch%d", fields[fieldI].c_str(), patchI);
             sprintf (tmpstr, "%s", pf1.patch().name().c_str());
-            adios_define_attribute (groupID_, "name", pathstr, adios_string, tmpstr, NULL);
+            adios_define_attribute (groupID_, "name", patchName, adios_string, tmpstr, NULL);
             sprintf (tmpstr, "%s", pf1.type().c_str());
-            adios_define_attribute (groupID_, "type", pathstr, adios_string, tmpstr, NULL);
+            adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
 
             // count the total size we are going to write from this process
             outputSize_ += pf1.size() * sizeof(ioScalar);
@@ -110,18 +117,20 @@ void Foam::adiosWrite::fieldDefineScalar()
 }
 
         
-void Foam::adiosWrite::fieldDefineVector()
+void Foam::adiosWrite::fieldDefineVector(label regionID)
 {
-    char datasetName[128];
+    char datasetName[256];
     char dimstr[16];
-    forAll(vectorFields_, fieldI)
+    const fieldGroup<vector>& fields (regions_[regionID].vectorFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
     {
-        Info<< "    fieldDefineVector: " << vectorFields_[fieldI] << endl;
+        Info<< "    fieldDefineVector: " << fields[fieldI] << endl;
 
         // Lookup field
-        const volVectorField& field = obr_.lookupObject<volVectorField>
+        const volVectorField& field = m.lookupObject<volVectorField>
             (
-                vectorFields_[fieldI]
+                fields[fieldI]
             );
 
         /*sprintf
@@ -130,9 +139,9 @@ void Foam::adiosWrite::fieldDefineVector()
                 "FIELDS/%s/processor%i/%s",
                 mesh_.time().timeName().c_str(),
                 Pstream::myProcNo(),
-                vectorFields_[fieldI].c_str()
+                fields[fieldI].c_str()
             );*/
-        sprintf (datasetName, "fields/%s", vectorFields_[fieldI].c_str());
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
 
         // Define a 2D array with "field.size x 3"  as global size, and 
         //   local (this process') size and with offset 0,0 
@@ -145,16 +154,18 @@ void Foam::adiosWrite::fieldDefineVector()
     }
 }
 
-void Foam::adiosWrite::fieldWriteScalar()
+void Foam::adiosWrite::fieldWriteScalar(label regionID)
 {
-    forAll(scalarFields_, fieldI)
+    const fieldGroup<scalar>& fields (regions_[regionID].scalarFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
     {
-        Info<< "    fieldWriteScalar: " << scalarFields_[fieldI] << endl;
+        Info<< "    fieldWriteScalar: " << fields[fieldI] << endl;
         
         // Lookup field
-        const volScalarField& field = obr_.lookupObject<volScalarField>
+        const volScalarField& field = m.lookupObject<volScalarField>
             (
-                scalarFields_[fieldI]
+                fields[fieldI]
             );
         
         
@@ -187,17 +198,10 @@ void Foam::adiosWrite::fieldWriteScalar()
         //    }
         //}
 
-        char datasetName[80];
+        char datasetName[256];
+        char patchName[256];
         // dataset for this process
-        /*sprintf
-            (
-                datasetName,
-                "FIELDS/%s/processor%i/%s",
-                mesh_.time().timeName().c_str(),
-                Pstream::myProcNo(),
-                scalarFields_[fieldI].c_str()
-            );*/
-        sprintf (datasetName, "fields/%s", scalarFields_[fieldI].c_str());
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
 
         // Do the actual write
         adios_write (fileID_, datasetName, scalarData);
@@ -218,23 +222,25 @@ void Foam::adiosWrite::fieldWriteScalar()
                     pf1.byteSize()
                    );
             // FIXME: what's the name of pf1 in the output?
-            sprintf (datasetName, "fields/%s/patch%d", scalarFields_[fieldI].c_str(), patchI);
-            adios_write (fileID_, datasetName, scalarData);
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            adios_write (fileID_, patchName, scalarData);
             delete [] scalarData;
         }
     }
 }
 
 
-void Foam::adiosWrite::fieldWriteVector()
+void Foam::adiosWrite::fieldWriteVector(label regionID)
 {
-    forAll(vectorFields_, fieldI)
+    const fieldGroup<vector>& fields (regions_[regionID].vectorFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
     {
-        Info<< "    fieldWriteVector: " << vectorFields_[fieldI] << endl;
+        Info<< "    fieldWriteVector: " << fields[fieldI] << endl;
         
-        const volVectorField& field = obr_.lookupObject<volVectorField>
+        const volVectorField& field = m.lookupObject<volVectorField>
             (
-                vectorFields_[fieldI]
+                fields[fieldI]
             );
         
         //Initialize a plain continous array for the data
@@ -264,18 +270,11 @@ void Foam::adiosWrite::fieldWriteVector()
         //}
         
         // Create the different datasets (needs to be done collectively)
-        char datasetName[80];
+        char datasetName[256];
+        char patchName[256];
 
         // Dataset for this process
-        /*sprintf
-            (
-                datasetName,
-                "FIELDS/%s/processor%i/%s",
-                mesh_.time().timeName().c_str(),
-                Pstream::myProcNo(),
-                vectorFields_[fieldI].c_str()
-            );*/
-        sprintf (datasetName, "fields/%s", vectorFields_[fieldI].c_str());
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
         
         // Do the actual write
         adios_write (fileID_, datasetName, vectorData);
