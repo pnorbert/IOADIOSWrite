@@ -36,6 +36,7 @@ void Foam::adiosWrite::fieldDefine(label regionID)
 
     fieldDefineScalar(regionID);
     fieldDefineVector(regionID);
+    fieldDefineSurfaceScalar(regionID);
 }
 
 void Foam::adiosWrite::fieldWrite(label regionID)
@@ -43,6 +44,7 @@ void Foam::adiosWrite::fieldWrite(label regionID)
     Info<< "  adiosWrite::fieldWrite: region " << regionID << " " << regions_[regionID].name_ << ": " << endl;
     fieldWriteScalar(regionID);
     fieldWriteVector(regionID);
+    fieldWriteSurfaceScalar(regionID);
 }
 
 void Foam::adiosWrite::fieldDefineScalar(label regionID)
@@ -116,10 +118,64 @@ void Foam::adiosWrite::fieldDefineScalar(label regionID)
     }
 }
 
+void Foam::adiosWrite::fieldDefineSurfaceScalar(label regionID)
+{
+    char datasetName[256];
+    char patchName[256];
+    char dimstr[16];
+    const fieldGroup<scalar>& fields (regions_[regionID].surfaceScalarFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
+    {
+        Info<< "    fieldDefineSurfaceScalar: " << fields[fieldI] << endl;
+
+        // Lookup field
+        const surfaceScalarField& field = m.lookupObject<surfaceScalarField> (fields[fieldI]);
+
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
+
+        // Define a 1D array with field.size as global size, and 
+        //   local (this process') size and with offset 0, 
+        // Type is float or double depending on OpenFoam precision
+        sprintf (dimstr, "%d", field.size()); // global and local dimension of the 1D array
+        adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
+
+        // count the total size we are going to write from this process
+        outputSize_ += field.size() * sizeof(ioScalar);
+
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvsPatchScalarField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI 
+                << ": name=" << pf1.patch().name() 
+                << ": type=" << pf1.type() 
+                << " empty=" << pf1.empty() 
+                << " size=" << pf1.size() 
+                << endl;
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            sprintf (dimstr, "%d", pf1.size()); // global and local dimension of the 1D array
+            adios_define_var (groupID_, patchName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
+
+            // define attributes to describe this patch
+            char tmpstr[128];
+            sprintf (tmpstr, "%s", pf1.patch().name().c_str());
+            adios_define_attribute (groupID_, "name", patchName, adios_string, tmpstr, NULL);
+            sprintf (tmpstr, "%s", pf1.type().c_str());
+            adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
+
+            // count the total size we are going to write from this process
+            outputSize_ += pf1.size() * sizeof(ioScalar);
+        }
+    }
+}
+
+
         
 void Foam::adiosWrite::fieldDefineVector(label regionID)
 {
     char datasetName[256];
+    char patchName[256];
     char dimstr[16];
     const fieldGroup<vector>& fields (regions_[regionID].vectorFields_);
     const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
@@ -146,11 +202,38 @@ void Foam::adiosWrite::fieldDefineVector(label regionID)
         // Define a 2D array with "field.size x 3"  as global size, and 
         //   local (this process') size and with offset 0,0 
         // Type is float or double depending on OpenFoam precision
-        sprintf (dimstr, "%d,3", field.size()); // global and local dimension of the 1D array
+        sprintf (dimstr, "%d,3", field.size()); // global and local dimension of the 2D array
         adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, dimstr, dimstr, "0,0");
 
         // count the total size we are going to write from this process
         outputSize_ += field.size() * 3 * sizeof(ioScalar);
+
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvPatchVectorField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI 
+                << ": name=" << pf1.patch().name() 
+                << ": type=" << pf1.type() 
+                << " empty=" << pf1.empty() 
+                << " size=" << pf1.size() 
+                << endl;
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            sprintf (dimstr, "%d,3", pf1.size()); // global and local dimension of the 2D array
+            adios_define_var (groupID_, patchName, "", ADIOS_SCALAR, dimstr, dimstr, "0,0");
+
+            // define attributes to describe this patch
+            //char pathstr[128];
+            char tmpstr[128];
+            //sprintf (pathstr, "fields/%s/patch%d", fields[fieldI].c_str(), patchI);
+            sprintf (tmpstr, "%s", pf1.patch().name().c_str());
+            adios_define_attribute (groupID_, "name", patchName, adios_string, tmpstr, NULL);
+            sprintf (tmpstr, "%s", pf1.type().c_str());
+            adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
+
+            // count the total size we are going to write from this process
+            outputSize_ += pf1.size() * 3 * sizeof(ioScalar);
+        }
     }
 }
 
@@ -217,10 +300,74 @@ void Foam::adiosWrite::fieldWriteScalar(label regionID)
             const fvPatchScalarField& pf1 = field.boundaryField()[patchI];
             Info<< "      patchfield " << patchI << ":" << endl;
             scalarData = new ioScalar[field.size()];
-            memcpy (scalarData,  
+            /*memcpy (scalarData,  
                     reinterpret_cast<const char *>(pf1.internalField().cdata()),
                     pf1.byteSize()
-                   );
+                   );*/
+            forAll(pf1, iter)
+            {
+                scalarData[iter] = pf1[iter];
+            }
+
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            adios_write (fileID_, patchName, scalarData);
+            delete [] scalarData;
+        }
+    }
+}
+
+void Foam::adiosWrite::fieldWriteSurfaceScalar(label regionID)
+{
+    const fieldGroup<scalar>& fields (regions_[regionID].surfaceScalarFields_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    forAll(fields, fieldI)
+    {
+        Info<< "    fieldWriteSurfaceScalar: " << fields[fieldI] << endl;
+        
+        // Lookup field
+        const surfaceScalarField& field = m.lookupObject<surfaceScalarField>
+            (
+                fields[fieldI]
+            );
+        
+        
+        // Initialize a plain continuous array for the data
+        ioScalar* scalarData;
+        scalarData = new ioScalar[field.size()];
+        memcpy (scalarData,  
+                reinterpret_cast<const char *>(field.internalField().cdata()),
+                field.byteSize()
+               );
+
+        char datasetName[256];
+        char patchName[256];
+        // dataset for this process
+        sprintf (datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
+
+        // Do the actual write
+        adios_write (fileID_, datasetName, scalarData);
+        //adios_write (fileID_, datasetName, reinterpret_cast<void *>(field.internalField().data());
+
+        // Release memory
+        delete [] scalarData;
+
+
+        // Do the same for all patches
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvsPatchScalarField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI << ":" << endl;
+            scalarData = new ioScalar[field.size()];
+            /*memcpy (scalarData,  
+                    reinterpret_cast<const char *>(pf1.internalField().cdata()),
+                    pf1.byteSize()
+                   );*/
+            forAll(pf1, iter)
+            {
+                scalarData[iter] = pf1[iter];
+            }
+
             // FIXME: what's the name of pf1 in the output?
             sprintf (patchName, "%s/patch%d", datasetName, patchI);
             adios_write (fileID_, patchName, scalarData);
@@ -282,6 +429,30 @@ void Foam::adiosWrite::fieldWriteVector(label regionID)
         
         // Release memory
         delete [] vectorData;
+
+        // Do the same for all patches
+        forAll(field.boundaryField(), patchI)
+        {
+            const fvPatchVectorField& pf1 = field.boundaryField()[patchI];
+            Info<< "      patchfield " << patchI << ":" << endl;
+            vectorData = new ioScalar[field.size()*3];
+            /*memcpy (vectorData,  
+                    reinterpret_cast<const char *>(pf1.internalField().cdata()),
+                    pf1.byteSize()
+                   );*/
+            int idx = 0;
+            forAll(pf1, iter)
+            {
+                vectorData[idx++] = pf1[iter].x();
+                vectorData[idx++] = pf1[iter].y();
+                vectorData[idx++] = pf1[iter].z();
+            }
+
+            // FIXME: what's the name of pf1 in the output?
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            adios_write (fileID_, patchName, vectorData);
+            delete [] vectorData;
+        }
     }
 }
 

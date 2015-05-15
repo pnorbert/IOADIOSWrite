@@ -45,6 +45,12 @@ Foam::label Foam::adiosWrite::appendFieldGroup
         r.vectorFields_.append(fieldName);
         return 1;
     }
+    else if (fieldType == surfaceScalarField::typeName)
+    {
+        r.surfaceScalarFields_.append(fieldName);
+        return 1;
+    }
+    /*
     else if (fieldType == volSphericalTensorField::typeName)
     {
         //r.sphericalTensorFields_.append(fieldName);
@@ -59,6 +65,15 @@ Foam::label Foam::adiosWrite::appendFieldGroup
     {
         //r.tensorFields_.append(fieldName);
         return 0;
+    }
+    */
+    else
+    {
+        WarningIn ( "Foam::adiosWrite::appendFieldGroup()")   
+            << "Field type " << fieldType
+            << "of the field " << fieldName 
+            << " is not handled by adiosWrite." 
+            << endl;
     }
 
     return 0;

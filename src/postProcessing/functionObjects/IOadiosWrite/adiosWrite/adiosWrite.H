@@ -45,7 +45,8 @@ Author
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
 #include "fvMesh.H"
-//#include "regionInfo.H" // local class in adiosWrite for per-region info
+#include "surfaceMesh.H"
+#include "fvsPatchFields.H"
 
 #include "adios.h"
 #include <stdio.h> // sprintf
@@ -122,6 +123,7 @@ protected:
             // Categorized scalar/vector/tensor fields
             fieldGroup<scalar> scalarFields_;
             fieldGroup<vector> vectorFields_;
+            fieldGroup<scalar> surfaceScalarFields_;
 
             // Array containing number of cells per process (often used list)
             List<label> nCells_;
@@ -195,11 +197,14 @@ protected:
           // Field define wrapper
           void fieldDefine (label regionID);
 
-          // Write scalar data
+          // Define scalar data
           void fieldDefineScalar (label regionID);
 
-          // Write vector data
+          // Define vector data
           void fieldDefineVector (label regionID);
+
+          // Define surface scalar data
+          void fieldDefineSurfaceScalar (label regionID);
 
           // Field write wrapper
           void fieldWrite (label regionID);
@@ -210,6 +215,9 @@ protected:
           // Write vector data
           void fieldWriteVector (label regionID);
       
+          // Write surface scalar data
+          void fieldWriteSurfaceScalar (label regionID);
+          
       
       // Functions for handling particle cloud data
           
