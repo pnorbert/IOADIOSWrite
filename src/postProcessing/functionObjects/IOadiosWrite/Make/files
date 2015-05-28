@@ -2,6 +2,7 @@ adiosWrite/adiosWrite.C
 adiosWrite/adiosWriteFunctionObject.C
 adiosWrite/adiosWriteGrouping.C
 adiosWrite/adiosWriteField.C
+adiosWrite/adiosWriteCloud.C
 adiosWrite/adiosWriteMesh.C
 adiosWrite/adiosOps.C
 

@@ -261,7 +261,7 @@ void Foam::adiosWrite::defineVars()
     {
         meshDefine(regionID); 
         fieldDefine(regionID);
-        //cloudDefine(regionID);
+        cloudDefine(regionID);
     }
 }
 
@@ -343,7 +343,7 @@ void Foam::adiosWrite::write()
             fieldWrite(regionID);
 
             // Write cloud data 
-            //cloudWrite(regionID);
+            cloudWrite(regionID);
         }
 
         // Close the ADIOS dataset at every timestep. It must be closed!
