@@ -110,9 +110,10 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& r)
     r.nParticles_.setSize(Pstream::nProcs());
 
     // Do a basic check to see if the objectNames_ is accessible
+    const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
     forAll(r.objectNames_, j)
     {
-        if (obr_.foundObject<regIOobject>(r.objectNames_[j]))
+        if (m.foundObject<regIOobject>(r.objectNames_[j]))
         {
             Info<< " " << r.objectNames_[j];
         }
@@ -122,7 +123,7 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& r)
                 (
                  "Foam::adiosWrite::read(const dictionary&)"
                 )   << "Object " << r.objectNames_[j] << " not found in "
-                << "database. Available objects:" << nl << obr_.sortedToc()
+                << "database. Available objects:" << nl << m.sortedToc()
                 << endl;
         }
 
