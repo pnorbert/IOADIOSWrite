@@ -179,7 +179,7 @@ void Foam::adiosWrite::fieldDefineSurfaceScalar(label regionID)
             adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
 
             // count the total size we are going to write from this process
-            outputSize_ += pf1.size() * sizeof(ioScalar);
+            outputSize_ += ostr.str().length(); // size of string storage of patch, unknown
         }
     }
 }
@@ -253,7 +253,8 @@ void Foam::adiosWrite::fieldDefineVector(label regionID)
             adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
 
             // count the total size we are going to write from this process
-            outputSize_ += pf1.size() * 3 * sizeof(ioScalar);
+            //outputSize_ += pf1.size() * 3 * sizeof(ioScalar);
+            outputSize_ += ostr.str().length(); // size of string storage of patch, unknown
         }
     }
 }
