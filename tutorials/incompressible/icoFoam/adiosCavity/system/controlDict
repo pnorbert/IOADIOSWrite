@@ -96,7 +96,7 @@ functions
             region0
             {
                 // Volume fields to write
-                objectNames         ( U p Lambda2 Q vorticity );
+                objectNames         ( U p Lambda2 Q vorticity phi);
         
                 // Kinematic clouds to write (leave blank to skip)
                 cloudNames          (  );
