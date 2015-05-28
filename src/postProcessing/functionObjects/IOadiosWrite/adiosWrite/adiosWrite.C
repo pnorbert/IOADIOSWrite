@@ -106,6 +106,8 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& r)
     r.nCells_.setSize(Pstream::nProcs());
     // Set length of cell data size array
     r.cellDataSizes_.setSize(Pstream::nProcs());
+    // Set length of particle numbers array
+    r.nParticles_.setSize(Pstream::nProcs());
 
     // Do a basic check to see if the objectNames_ is accessible
     forAll(r.objectNames_, j)
@@ -280,6 +282,16 @@ void Foam::adiosWrite::write()
         // Write info to terminal
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
+#if 1
+        if (timeSteps_ != 0)
+        {
+            // the size of patch variables is changing at every step, so in 
+            // ADIOS we have to redefine the variables (all of them for simplicity)
+            deleteDefinitions();
+        }
+        defineVars();
+#else
+
         if (timeSteps_ == 0)
         {
 
@@ -310,6 +322,7 @@ void Foam::adiosWrite::write()
             deleteDefinitions();
             defineVars();
         }
+#endif
 
         // Create/reopen ADIOS output file, and tell ADIOS how man bytes we are going to write
         open();

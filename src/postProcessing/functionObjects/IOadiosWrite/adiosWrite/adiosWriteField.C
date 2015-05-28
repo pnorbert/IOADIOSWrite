@@ -24,6 +24,7 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosWrite.H"
+#include "OStringStream.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
@@ -94,8 +95,18 @@ void Foam::adiosWrite::fieldDefineScalar(label regionID)
                 << endl;
             // FIXME: what's the name of pf1 in the output?
             sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            /*
             sprintf (dimstr, "%d", pf1.size()); // global and local dimension of the 1D array
             adios_define_var (groupID_, patchName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
+            */
+            //adios_define_var (groupID_, patchName, "", adios_string, NULL, NULL, NULL);
+
+            OStringStream ostr;
+            ostr << pf1;
+            //Info<< "patch " << patchName << " content: " << ostr.str() << endl;
+            sprintf (dimstr, "%d", ostr.str().length()); // global and local dimension of the 1D array
+            adios_define_var (groupID_, patchName, "", adios_byte, dimstr, dimstr, "0");
+            
 
             // define attributes to describe this patch
             //char pathstr[128];
@@ -107,7 +118,8 @@ void Foam::adiosWrite::fieldDefineScalar(label regionID)
             adios_define_attribute (groupID_, "type", patchName, adios_string, tmpstr, NULL);
 
             // count the total size we are going to write from this process
-            outputSize_ += pf1.size() * sizeof(ioScalar);
+            //outputSize_ += pf1.size() * sizeof(ioScalar); // size of data array
+            outputSize_ += ostr.str().length(); // size of string storage of patch, unknown
 
             //forAll(pf1, faceI)
             // {
@@ -299,6 +311,7 @@ void Foam::adiosWrite::fieldWriteScalar(label regionID)
         {
             const fvPatchScalarField& pf1 = field.boundaryField()[patchI];
             Info<< "      patchfield " << patchI << ":" << endl;
+#if 0
             scalarData = new ioScalar[field.size()];
             /*memcpy (scalarData,  
                     reinterpret_cast<const char *>(pf1.internalField().cdata()),
@@ -313,6 +326,17 @@ void Foam::adiosWrite::fieldWriteScalar(label regionID)
             sprintf (patchName, "%s/patch%d", datasetName, patchI);
             adios_write (fileID_, patchName, scalarData);
             delete [] scalarData;
+#else
+            OStringStream ostr;
+            ostr << pf1;
+            //pf1.write(ostr);
+            // Need to copy constant string to buffer because adios_write() wants non-const
+            char *buf = strdup (ostr.str().c_str());
+            sprintf (patchName, "%s/patch%d", datasetName, patchI);
+            Info<< "patch " << patchName << " content: " << ostr.str() << endl;
+            adios_write (fileID_, patchName, buf);
+            free(buf);
+#endif
         }
     }
 }

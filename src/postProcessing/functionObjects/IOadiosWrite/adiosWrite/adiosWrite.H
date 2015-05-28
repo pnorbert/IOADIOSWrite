@@ -132,6 +132,11 @@ protected:
             //   calculated in meshDefineCells, used in meshWriteCells
             //   only the local size is used currently
             List<label> cellDataSizes_;
+
+            // Array containing number of particles per process (often used list)
+            List<label> nParticles_;
+            // Sum of above list
+            label nTotalParticles_;
         };
     
     
