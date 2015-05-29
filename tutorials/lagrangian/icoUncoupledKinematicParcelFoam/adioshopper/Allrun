@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Copy base case
+if [ ! -d system ]; then
+  cp -r $FOAM_TUTORIALS/lagrangian/icoUncoupledKinematicParcelFoam/hopper/hopperInitialState/* ./
+fi
+
+# Insert function object in system/controlDict file
+PRESENT=`cat system/controlDict | grep libIOadiosWrite.so | wc -l`
+if [ $PRESENT -lt '1' ]; then
+  cat functionObjects >> system/controlDict
+fi
+
+# Source tutorial run functions
+. $WM_PROJECT_DIR/bin/tools/RunFunctions
+
+# Mesh and run simulation
+runApplication blockMesh
+runApplication decomposePar
+runParallel `getApplication` 4
+
+# Dump last ADIOS file stats to terminal
+echo -e "\n\n"
+ls -ltr adiosData
+echo -e "\n\n"
+f=`ls -tr adiosData | tail -1`
+echo "-- List content of the last file: ${f}"
+bpls adiosData/${f}
+

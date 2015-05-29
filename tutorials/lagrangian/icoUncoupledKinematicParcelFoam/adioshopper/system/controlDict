@@ -1,0 +1,102 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  2.2.2                                 |
+|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    object      controlDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+application     icoUncoupledKinematicParcelFoam;
+
+startFrom       startTime;
+
+startTime       0;
+
+stopAt          endTime;
+
+endTime         0.0005;
+
+deltaT          5e-5;
+
+writeControl    runTime;
+
+writeInterval   0.0001;
+
+purgeWrite      0;
+
+writeFormat     ascii;
+
+writePrecision  6;
+
+writeCompression uncompressed;
+
+timeFormat      general;
+
+timePrecision   6;
+
+runTimeModifiable yes;
+
+// ************************************************************************* //
+
+functions
+{
+    adiosData
+    {
+        // Write the solution (Eulerian and Lagrangian fields)
+        // into an ADIOS container
+        type                adiosWrite;
+        
+        // Where to load it from
+        functionObjectLibs  ( "libIOadiosWrite.so" );
+
+        // We can write mesh, fields and particles from multiple regions 
+        regions 
+        (
+         
+            // Name of primary region is 'region0'
+            region0
+            {
+                // Volume fields to write
+                objectNames         ( );
+        
+                // Kinematic clouds to write (leave blank to skip)
+                cloudNames          ( kinematicCloud );
+        
+                // Attributes to write for particles. Valid choices are:
+                //  - origProc        = Original process (from where it was injected)
+                //  - origId          = ID on orignal process
+                //  - cell            = Current cell (on local process)
+                //  - currProc        = Current process
+                //  - rho             = Particle density
+                //  - d               = Particle diameter
+                //  - age             = Particle age
+                //  - position        = Position in space
+                //  - U               = Particle velocity
+                //  - Us              = Slip velocity Us = U - Uc
+                cloudAttribs        ( origProc origID cell currProc rho d position U Us age );
+
+            }
+        )
+
+        // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
+        // run 'adios_config -m' to see available methods
+        adiosMethod        MPI;
+
+        // Parameters for the selected method, default = ""
+        methodparams       "verbose=4";
+        
+        // Write interval (in number of iterations)
+        writeInterval       5;
+    }
+}
+
+// ************************************************************************* //
