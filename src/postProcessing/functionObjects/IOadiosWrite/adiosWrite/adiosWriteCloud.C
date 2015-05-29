@@ -121,7 +121,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
 
     forAll(r.cloudNames_, cloudI)
     {
-        Info<< "  cloudWrite: " << r.cloudNames_[cloudI] << endl;
+        Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
         
         // If the cloud contains no particles, jump to the next cloud
         if (r.nTotalParticles_ == 0)
@@ -146,6 +146,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write original processor ID
         if (findStrings(r.cloudAttribs_, "origProc"))
         {
+            Info<< "      dataset origProc " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
@@ -159,6 +160,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write original ID
         if (findStrings(r.cloudAttribs_, "origId"))
         {
+            Info<< "      dataset origId " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
@@ -172,6 +174,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write cell number
         if (findStrings(r.cloudAttribs_, "cell"))
         {
+            Info<< "      dataset cell " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
@@ -185,6 +188,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write current process ID
         if (findStrings(r.cloudAttribs_, "currProc"))
         {
+            Info<< "      dataset currProc " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
@@ -195,10 +199,6 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             adios_write (fileID_, datasetName, particleLabel);
         }
         
-        // Free memory for 1-comp. dataset of type 'label'
-        delete [] particleLabel;
-        
-        
         // Allocate memory for 1-comp. dataset of type 'ioScalar'
         ioScalar* particleScalar1;
         particleScalar1 = new ioScalar[myParticles];
@@ -206,6 +206,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write density rho
         if (findStrings(r.cloudAttribs_, "rho"))
         {
+            Info<< "      dataset rho " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
@@ -219,6 +220,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Write diameter d
         if (findStrings(r.cloudAttribs_, "d"))
         {
+            Info<< "      dataset d " << endl;
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {
