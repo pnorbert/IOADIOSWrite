@@ -223,7 +223,8 @@ void Foam::adiosWrite::read(const dictionary& dict)
 
     Info<< type() << " " << name() << ":" << endl
         << "  ADIOS output method: " << adiosMethod_ << endl 
-        << "      with parameters: " << methodParams_ << endl;
+        << "      with parameters: " << methodParams_ << endl
+        << "       write interval: " << writeInterval_ << endl;
 }
 
 
