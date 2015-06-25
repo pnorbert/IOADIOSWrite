@@ -85,7 +85,7 @@ functions
                 cloudAttribs        ( origProc origID cell currProc rho d position U Us age );
 
             }
-        )
+        );
 
         // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
         // run 'adios_config -m' to see available methods

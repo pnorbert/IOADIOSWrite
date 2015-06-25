@@ -115,7 +115,7 @@ functions
                 cloudAttribs        (  );
 
             }
-        )
+        );
 
         // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
         // run 'adios_config -m' to see available methods
