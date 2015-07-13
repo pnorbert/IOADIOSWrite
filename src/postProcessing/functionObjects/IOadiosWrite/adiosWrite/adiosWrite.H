@@ -277,7 +277,7 @@ protected:
 
           //- Classify field types, returns the number of fields
           label classifyFields();
-          void test_print_obr();
+          //void test_print_obr();
           
           //- Disallow default bitwise copy construct
           adiosWrite(const adiosWrite&);

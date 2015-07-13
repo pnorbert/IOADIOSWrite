@@ -66,9 +66,6 @@ Foam::adiosWrite::adiosWrite
     // Read dictionary
     read(dict);
     
-    // Classify fields for all regions
-    classifyFields();
-    
     // Set the actual output method here for the ADIOS group
     adios_select_method (groupID_, adiosMethod_.c_str(), methodParams_.c_str(), "");
     adios_allocate_buffer (ADIOS_BUFFER_ALLOC_NOW, 10);
@@ -284,6 +281,10 @@ void Foam::adiosWrite::write()
         // Write info to terminal
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
+        // Classify fields for all regions
+        // at every write step in case new variables appear (they tend to, after the initial write at time 0)
+        classifyFields();
+    
 #if 1
         if (timeSteps_ != 0)
         {

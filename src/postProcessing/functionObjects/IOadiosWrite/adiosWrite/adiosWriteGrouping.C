@@ -79,7 +79,7 @@ Foam::label Foam::adiosWrite::appendFieldGroup
     return 0;
 }
 
-void Foam::adiosWrite::test_print_obr()
+/*void Foam::adiosWrite::test_print_obr()
 {
     Info<< "adiosWrite objectRegistry list: " << endl;
     wordList allFields = obr_.sortedNames();
@@ -95,13 +95,13 @@ void Foam::adiosWrite::test_print_obr()
 
         }
     }
-}
+}*/
 
 Foam::label Foam::adiosWrite::classifyFields()
 {
     label nFields = 0;
     
-    test_print_obr();
+    // test_print_obr();
 
     Info<< endl << "Foam::adiosWrite::classifyFields: " << endl;
     // Check currently available fields
@@ -110,6 +110,10 @@ Foam::label Foam::adiosWrite::classifyFields()
     {
         regionInfo& r = regions_[regionI];
         Info<< "  region " << regionI << " " << r.name_ << ": " << endl;
+
+        r.scalarFields_.clear(); // clear it because we will add all of them again and again
+        r.vectorFields_.clear();
+        r.surfaceScalarFields_.clear();
 
         const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
         wordList allFields = mesh.sortedNames();
