@@ -74,6 +74,8 @@ void Foam::adiosWrite::cloudDefine(label regionID)
         {
             offsets[proc] = offsets[proc-1] + r.nParticles_[proc-1];
         }
+
+        //List<word> intsets(4) = {"origProc", "origID", "cell", "currProc"};
         
         // Define a variable for dataset name
         char varPath[256];
@@ -87,6 +89,10 @@ void Foam::adiosWrite::cloudDefine(label regionID)
         
         // Define all possible output variables, not necessary to write all of them later
         sprintf (varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
+
+        adios_define_var (groupID_, "nParticlesPerProc", varPath, adios_integer, NULL, NULL, NULL);
+        adios_define_var (groupID_, "nTotalParticles", varPath, adios_integer, NULL, NULL, NULL);
+        outputSize_ += 2*sizeof(int);
 
         // integer info datasets
         adios_define_var (groupID_, "origProc", varPath, adios_integer, ldimstr, gdimstr, offsstr);
@@ -143,6 +149,13 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer writes
         int particleLabel[myParticles];
         
+        sprintf (datasetName, "%s/nParticlesPerProc", varPath);
+        int nparts = myParticles;
+        int ntotalparts = r.nTotalParticles_;
+        adios_write (fileID_, datasetName, &nparts);
+        sprintf (datasetName, "%s/nTotalParticles", varPath);
+        adios_write (fileID_, datasetName, &ntotalparts);
+
         // Write original processor ID
         if (findStrings(r.cloudAttribs_, "origProc"))
         {
