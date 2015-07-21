@@ -96,6 +96,10 @@ functions
         
         // Write interval (in number of iterations)
         writeInterval       5;
+
+        // Restart with output time not step  (set to 0 if no restart needed)
+        // e.g. 1.725 will look for adiosData/1.725.bp for checkpoint data
+        restartTime         0.0005;
     }
 }
 

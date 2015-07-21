@@ -49,6 +49,7 @@ Author
 #include "fvsPatchFields.H"
 
 #include "adios.h"
+#include "adios_read.h"
 #include <stdio.h> // sprintf
 
 // If OpenFOAM is compiled with single precision, the IO will be single
@@ -167,6 +168,9 @@ protected:
 
         //- Write interval (in number of iterations)
         label writeInterval_;
+
+        // Restart time requested
+        scalar restartTime_;
 
         // Used to track when to write
         label nextWrite_;
@@ -297,6 +301,19 @@ protected:
       static const cellModel* hexModel;
       static const cellModel* wedgeModel;
 
+      
+      // Restart functions
+
+        // Read data from a given time
+        // attempt to read data for all variables existing in memory
+        // returns true on success, false on failure
+        bool readData(scalar time);
+        bool readScalarFields(label regionID);
+        bool readClouds(label regionID);
+        bool readADIOSVar ( 
+                ADIOS_FILE *f, ADIOS_SELECTION *sel, 
+                const char * path1, const char * path2, 
+                void * data);
 
 public:
 
@@ -332,7 +349,7 @@ public:
         //- Read the adiosWrite data
         virtual void read(const dictionary&);
 
-        //- Execute, currently does nothing
+        //- Execute, handles restart at first call if requested
         virtual void execute();
 
         //- Execute at the final time-loop, currently does nothing

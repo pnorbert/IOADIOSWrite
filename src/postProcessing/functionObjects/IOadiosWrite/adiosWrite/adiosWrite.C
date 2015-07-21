@@ -71,7 +71,11 @@ Foam::adiosWrite::adiosWrite
     adios_allocate_buffer (ADIOS_BUFFER_ALLOC_NOW, 10);
 
     // Write initial conditions (including mesh)
-    write();
+    if (restartTime_ == 0.0) {
+        write();
+    } else {
+        Info<< " Restart will happen later. We skip writing the initial 0 time " << endl;
+    }
 }
 
 
@@ -201,12 +205,18 @@ void Foam::adiosWrite::read(const dictionary& dict)
     // Lookup chunk size if present
     adiosMethod_  = dict.lookupOrDefault<word>("adiosMethod", "MPI");
     methodParams_ = dict.lookupOrDefault<string>("methodparams", "");
+
+    restartTime_ = dict.lookupOrDefault<scalar>("restartTime", 0.0);
     
     // Print info to terminal
     int writeprec = sizeof(ioScalar);
     Info<< type() << " " << name() << ":" << endl
         << "  Compiled with " << writeprec << " bytes precision." << endl
         << "  writing every " << writeInterval_ << " iterations:" << endl;
+    if (restartTime_ > 0.0) 
+    {
+        Info<< "  restart time requested " << restartTime_ << endl;
+    }
     
     
     // Check if writeInterval is a positive number
@@ -227,22 +237,42 @@ void Foam::adiosWrite::read(const dictionary& dict)
 
 void Foam::adiosWrite::execute()
 {
-    // Nothing to be done here
-    Info<< "adiosWrite::execute() has been called " << endl;
+    /* execute() is called at the first non-zero time, after the calculation, before write() is called.
+       This is a good point to do restart because fields created by other function objects exist at
+       this point (e.g. fieldAverage variables)
+    */
+    static bool restarted = false; 
+    Info<< "adiosWrite::execute() timeOutputValue  = " << obr_.time().timeOutputValue() << endl;
+    if (restartTime_ > 0.0 && !restarted) 
+    {
+        Info<< "  restart time requested was " << restartTime_ << ". Let's do restart now." << endl;
+        restarted = true; // even if it fails we don't try it again
+        // classify fields in the object space, then read data from restart file for each
+        classifyFields();
+        if (!readData(restartTime_))
+        {
+            FatalErrorIn("adiosWrite::execute()")
+                << "Restart reading failed for time " << restartTime_
+                << exit(FatalIOError);
+        }
+
+
+        //runTime.setTime (restartTime_, 0 /* correct timeIndex is needed here */);
+    }
 }
 
 
 void Foam::adiosWrite::end()
 {
     // Nothing to be done here
-    Info<< "adiosWrite::end() has been called " << endl;
+    Info<< "adiosWrite::end() has been called at time " << obr_.time().timeName() << endl;
 }
 
 
 void Foam::adiosWrite::timeSet()
 {
     // Nothing to be done here
-    Info<< "adiosWrite::timeSet() has been called " << endl;
+    Info<< "adiosWrite::timeSet() has been called at time " << obr_.time().timeName() << endl;
 }
 
 
@@ -273,7 +303,8 @@ void Foam::adiosWrite::deleteDefinitions()
 
 void Foam::adiosWrite::write()
 {
-    Info<< "adiosWrite::write() has been called at time " << obr_.time().timeName() << endl;
+    Info<< "adiosWrite::write() has been called at time " << obr_.time().timeName() 
+        << " time index " << obr_.time().timeIndex() << endl;
     // Check if we are going to write
     //if ( timeSteps_ == 0 )
     if ( timeSteps_ == nextWrite_ )
