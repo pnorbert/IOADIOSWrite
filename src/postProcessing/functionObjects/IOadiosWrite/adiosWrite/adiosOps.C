@@ -32,8 +32,8 @@ License
 void Foam::adiosWrite::open()
 {
     Info<< "adiosWrite::open:" << endl;
-    
-    
+
+
     // Create output directory if nonexisting in the beginning
     static bool checkdir = true;
     if (checkdir && !isDir("adiosData"))
@@ -41,12 +41,12 @@ void Foam::adiosWrite::open()
         mkDir("adiosData");
     }
     checkdir = false;
-    
-    
+
+
     // Find and create filename
     char dataFile[80];
     char mode[] = "w";
-    
+
     sprintf(dataFile, "adiosData/%s.bp", obr_.time().timeName().c_str());
 
     // Create/open a new file collectively.
@@ -69,17 +69,20 @@ void Foam::adiosWrite::open()
 
     // Print info to terminal
     Info<< "  adiosWrite: Chosen filename " << dataFile << endl << endl;
-    
-    int err = adios_open (&fileID_, name_.c_str(), dataFile, mode, comm_); 
+
+    int err = adios_open (&fileID_, name_.c_str(), dataFile, mode, comm_);
 
     if (!err)
     {
         // Tell ADIOS how many bytes we are going to write in this step (by this process)
         uint64_t total_size; // user data bytes + metadata, buffer size should be bigger
         adios_group_size (fileID_, outputSize_, &total_size);
-    } else {
-        WarningIn ("Foam::adiosWrite::open()")  << "File " << name_.c_str()
-            << " could not be created: " << nl 
+    }
+    else
+    {
+        WarningInFunction
+            << "File " << name_.c_str()
+            << " could not be created: " << nl
             << adios_get_last_errmsg();
         fileID_ = 0;
     }
@@ -90,9 +93,10 @@ void Foam::adiosWrite::close()
 {
     MPI_Barrier(MPI_COMM_WORLD);
     Info<< "adiosWrite::close" << endl << endl;
-    
+
     // Close the file
-    if (fileID_) {
+    if (fileID_)
+    {
         adios_close(fileID_);
     }
 }

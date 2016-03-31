@@ -10,7 +10,7 @@ rm log.*
 #foamCleanTutorials
 
 # And delete mesh
-foamClearPolyMesh
+foamCleanPolyMesh
 
 # delete ADIOS output
 rm -rf adiosData/*.bp*

@@ -4,6 +4,7 @@
    \\    /   O peration     |
     \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
      \\/     M anipulation  |               2015 Norbert Podhorszki
+                            |               2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -34,31 +35,28 @@ void Foam::adiosWrite::cloudDefine(label regionID)
     regionInfo& r = regions_[regionID];
     Info<< "  adiosWrite::cloudDefine: region " << regionID << " " << r.name_ << ": " << endl;
 
-    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+
     forAll(r.cloudNames_, cloudI)
     {
         Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
 
-        // Thanks to Johan Spång for providing instructions on how to access
-        // cloud data
-        // (http://www.cfd-online.com/Forums/openfoam/75528-access-particle-data-functionobject.html)
-        const kinematicCloud& cloud = m.lookupObject<kinematicCloud>
-            (
-                r.cloudNames_[cloudI]
-            );
-        basicKinematicCloud *q = (basicKinematicCloud*) &cloud;
-        
+        const kinematicCloud& cloud =
+            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+        const basicKinematicCloud& q =
+            static_cast<const basicKinematicCloud&>(cloud);
+
         // Number of particles on this process
-        label myParticles = (*q).size();
-        
+        label myParticles = q.size();
+
         // Find the number of particles on each process
         r.nParticles_[Pstream::myProcNo()] = myParticles;
         Pstream::gatherList(r.nParticles_);
         Pstream::scatterList(r.nParticles_);
-        
+
         // Sum total number of particles on all processes
         r.nTotalParticles_ = sum(r.nParticles_);
-        
+
         // If the cloud contains no particles, jump to the next cloud
         if (r.nTotalParticles_ == 0)
         {
@@ -76,7 +74,7 @@ void Foam::adiosWrite::cloudDefine(label regionID)
         }
 
         //List<word> intsets(4) = {"origProc", "origID", "cell", "currProc"};
-        
+
         // Define a variable for dataset name
         char varPath[256];
         char gdimstr[16]; // 1D global array of particles from all processes
@@ -84,9 +82,9 @@ void Foam::adiosWrite::cloudDefine(label regionID)
         char offsstr[16]; // this process' offset in global array
 
         sprintf (gdimstr, "%d", r.nTotalParticles_);
-        sprintf (ldimstr, "%d", myParticles); 
-        sprintf (offsstr, "%d", offsets[Pstream::myProcNo()]); 
-        
+        sprintf (ldimstr, "%d", myParticles);
+        sprintf (offsstr, "%d", offsets[Pstream::myProcNo()]);
+
         // Define all possible output variables, not necessary to write all of them later
         sprintf (varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
 
@@ -109,8 +107,8 @@ void Foam::adiosWrite::cloudDefine(label regionID)
 
         // vector datasets
         sprintf (gdimstr, "%d,3", r.nTotalParticles_);
-        sprintf (ldimstr, "%d,3", myParticles); 
-        sprintf (offsstr, "%d,0", offsets[Pstream::myProcNo()]); 
+        sprintf (ldimstr, "%d,3", myParticles);
+        sprintf (offsstr, "%d,0", offsets[Pstream::myProcNo()]);
         adios_define_var (groupID_, "position", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var (groupID_, "U",        varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var (groupID_, "Us",       varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
@@ -122,33 +120,32 @@ void Foam::adiosWrite::cloudDefine(label regionID)
 void Foam::adiosWrite::cloudWrite(label regionID)
 {
     const regionInfo& r = regions_[regionID];
-    const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
     Info<< "  adiosWrite::cloudWrite: region " << regionID << " " << r.name_ << ": " << endl;
 
     forAll(r.cloudNames_, cloudI)
     {
         Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
-        
+
         // If the cloud contains no particles, jump to the next cloud
         if (r.nTotalParticles_ == 0)
         {
             continue;
         }
-        
-        const kinematicCloud& cloud = m.lookupObject<kinematicCloud>
-            (
-                r.cloudNames_[cloudI]
-            );
-        basicKinematicCloud *q = (basicKinematicCloud*) &cloud;
-        
+
+        const kinematicCloud& cloud =
+            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+        const basicKinematicCloud& q =
+            static_cast<const basicKinematicCloud&>(cloud);
+
         label myParticles = r.nParticles_[Pstream::myProcNo()];
 
         char varPath[256], datasetName[256];
         sprintf (varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
-        
+
         // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer writes
         int particleLabel[myParticles];
-        
+
         sprintf (datasetName, "%s/nParticlesPerProc", varPath);
         int nparts = myParticles;
         int ntotalparts = r.nTotalParticles_;
@@ -161,115 +158,108 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         {
             Info<< "      dataset origProc " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleLabel[i] = pIter().origProc();
-                i++;
+                particleLabel[i++] = pIter().origProc();
             }
             sprintf (datasetName, "%s/origProc", varPath);
             adios_write (fileID_, datasetName, particleLabel);
-        }  
-        
+        }
+
         // Write original ID
         if (findStrings(r.cloudAttribs_, "origId"))
         {
             Info<< "      dataset origId " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleLabel[i] = pIter().origId();
-                i++;
+                particleLabel[i++] = pIter().origId();
             }
             sprintf (datasetName, "%s/origId", varPath);
             adios_write (fileID_, datasetName, particleLabel);
-        } 
-        
+        }
+
         // Write cell number
         if (findStrings(r.cloudAttribs_, "cell"))
         {
             Info<< "      dataset cell " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleLabel[i] = pIter().cell();
-                i++;
+                particleLabel[i++] = pIter().cell();
             }
             sprintf (datasetName, "%s/cell", varPath);
             adios_write (fileID_, datasetName, particleLabel);
         }
-        
+
         // Write current process ID
         if (findStrings(r.cloudAttribs_, "currProc"))
         {
             Info<< "      dataset currProc " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleLabel[i] = Pstream::myProcNo();
-                i++;
+                particleLabel[i++] = Pstream::myProcNo();
             }
             sprintf (datasetName, "%s/currProc", varPath);
             adios_write (fileID_, datasetName, particleLabel);
         }
-        
+
         // Allocate memory for 1-comp. dataset of type 'ioScalar'
         ioScalar* particleScalar1;
         particleScalar1 = new ioScalar[myParticles];
-        
+
         // Write density rho
         if (findStrings(r.cloudAttribs_, "rho"))
         {
             Info<< "      dataset rho " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleScalar1[i] = pIter().rho();
-                i++;
+                particleScalar1[i++] = pIter().rho();
             }
             sprintf (datasetName, "%s/rho", varPath);
             adios_write (fileID_, datasetName, particleScalar1);
         }
-        
+
         // Write diameter d
         if (findStrings(r.cloudAttribs_, "d"))
         {
             Info<< "      dataset d " << endl;
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleScalar1[i] = pIter().d();
-                i++;
+                particleScalar1[i++] = pIter().d();
             }
             sprintf (datasetName, "%s/d", varPath);
             adios_write (fileID_, datasetName, particleScalar1);
         }
-        
+
         // Write age
         if (findStrings(r.cloudAttribs_, "age"))
         {
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
-                particleScalar1[i] = pIter().age();
-                i++;
+                particleScalar1[i++] = pIter().age();
             }
             sprintf (datasetName, "%s/age", varPath);
             adios_write (fileID_, datasetName, particleScalar1);
         }
-        
+
         // Free memory for 1-comp. dataset of type 'ioScalar'
         delete [] particleScalar1;
-        
-        
+
+
         // Allocate memory for 3-comp. dataset of type 'ioScalar'
         ioScalar* particleScalar3;
         particleScalar3 = new ioScalar[myParticles*3];
-        
+
         // Write position
         if (findStrings(r.cloudAttribs_, "position"))
         {
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
                 particleScalar3[3*i+0] = pIter().position().x();
                 particleScalar3[3*i+1] = pIter().position().y();
@@ -279,12 +269,12 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             sprintf (datasetName, "%s/position", varPath);
             adios_write (fileID_, datasetName, particleScalar3);
         }
-        
+
         // Write velocity U
         if (findStrings(r.cloudAttribs_, "U"))
         {
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
                 particleScalar3[3*i+0] = pIter().U().x();
                 particleScalar3[3*i+1] = pIter().U().y();
@@ -294,12 +284,12 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             sprintf (datasetName, "%s/U", varPath);
             adios_write (fileID_, datasetName, particleScalar3);
         }
-        
+
         // Write slip velocity Us = U - Uc
         if (findStrings(r.cloudAttribs_, "Us"))
         {
             label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
+            forAllConstIter(basicKinematicCloud, q, pIter)
             {
                 particleScalar3[3*i+0] = pIter().U().x() - pIter().Uc().x();
                 particleScalar3[3*i+1] = pIter().U().y() - pIter().Uc().y();
@@ -309,13 +299,11 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             sprintf (datasetName, "%s/Us", varPath);
             adios_write (fileID_, datasetName, particleScalar3);
         }
-        
+
         // Free memory for 3-comp. dataset of type 'ioScalar'
         delete [] particleScalar3;
-        
     }
 }
-
 
 
 // ************************************************************************* //

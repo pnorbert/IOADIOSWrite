@@ -2,7 +2,7 @@
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
 |  \\    /   O peration     | Version:  2.2.2                                 |
-|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                       |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
@@ -54,23 +54,23 @@ functions
         // Write the solution (Eulerian and Lagrangian fields)
         // into an ADIOS container
         type                adiosWrite;
-        
+
         // Where to load it from
         functionObjectLibs  ( "libIOadiosWrite.so" );
 
-        // We can write mesh, fields and particles from multiple regions 
-        regions 
-        (
-         
+        // We can write mesh, fields and particles from multiple regions
+        regions
+        {
+
             // Name of primary region is 'region0'
             region0
             {
                 // Volume fields to write
                 objectNames         ( );
-        
+
                 // Kinematic clouds to write (leave blank to skip)
                 cloudNames          ( kinematicCloud );
-        
+
                 // Attributes to write for particles. Valid choices are:
                 //  - origProc        = Original process (from where it was injected)
                 //  - origId          = ID on orignal process
@@ -85,7 +85,7 @@ functions
                 cloudAttribs        ( origProc origID cell currProc rho d position U Us age );
 
             }
-        );
+        }
 
         // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
         // run 'adios_config -m' to see available methods
@@ -93,9 +93,13 @@ functions
 
         // Parameters for the selected method, default = ""
         methodparams       "verbose=4";
-        
+
         // Write interval (in number of iterations)
         writeInterval       5;
+
+        // Restart with output time not ste (do not use if no restart needed)
+        // e.g. 1.725 will look for adiosData/1.725.bp for checkpoint data
+//        restartTime         0.0005;
     }
 }
 

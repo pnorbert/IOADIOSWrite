@@ -10,7 +10,7 @@ rm output/*
 #foamCleanTutorials
 
 # And delete mesh
-foamClearPolyMesh
+foamCleanPolyMesh
 
 # delete ADIOS output
 rm -rf adios*.bp*

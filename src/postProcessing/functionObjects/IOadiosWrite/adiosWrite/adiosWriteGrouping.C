@@ -69,10 +69,10 @@ Foam::label Foam::adiosWrite::appendFieldGroup
     */
     else
     {
-        WarningIn ( "Foam::adiosWrite::appendFieldGroup()")   
+        WarningInFunction
             << "Field type " << fieldType
-            << "of the field " << fieldName 
-            << " is not handled by adiosWrite." 
+            << "of the field " << fieldName
+            << " is not handled by adiosWrite."
             << endl;
     }
 
@@ -100,7 +100,7 @@ Foam::label Foam::adiosWrite::appendFieldGroup
 Foam::label Foam::adiosWrite::classifyFields()
 {
     label nFields = 0;
-    
+
     // test_print_obr();
 
     Info<< endl << "Foam::adiosWrite::classifyFields: " << endl;
@@ -125,11 +125,12 @@ Foam::label Foam::adiosWrite::classifyFields()
             const word& type = mesh.find(fieldName)()->type();
 
             Info<< "    name = " << fieldName << "  type = " << type << endl;
-            nFields += appendFieldGroup (r, fieldName, type);
+            nFields += appendFieldGroup(r, fieldName, type);
         }
     }
 
     return nFields;
 }
+
 
 // ************************************************************************* //
