@@ -171,38 +171,11 @@ void Foam::adiosWrite::fieldWrite
         Info<< "    fieldWriteScalar: " << fields[fieldI] << endl;
 
         // Lookup field
-        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
+        const FieldType& constField =
+            mesh.lookupObject<FieldType>(fields[fieldI]);
 
-        // Initialize a plain continuous array for the data
-        ioScalar *scalarData;
-        // This does not work since adios_write() cannot accept const void *
-        //scalarData = reinterpret_cast<ioScalar*>(field.internalField().cdata());
-
-        /* FIXME: if we can get the field.xxxx as the double/float array
-         * then there is no need for this element-by-element copy
-         */
-        scalarData = new ioScalar[field.size()*pTraits<pType>::nComponents];
-        //if (contiguous("Type of field which is a templated class' object"))  //
-        //{
-            // adios_write() does not accept const void * arrays, so we need to copy the cdata here
-            // This only works as long as the field's type is the same as ioScalar
-            // i.e. float or double depending on the WM_DP compile flag
-            memcpy
-            (
-                scalarData,
-                //reinterpret_cast<const char *>(field.cdata()),
-                reinterpret_cast<const char *>(field.internalField().cdata()),
-                field.byteSize()
-            );
-        //}
-        //else
-        //{
-        //    // Loop through the field and construct the array
-        //    forAll(field, iter)
-        //    {
-        //        scalarData[iter] = field[iter];
-        //    }
-        //}
+        // ADIOS requires non-const access to the field for writing (?)
+        FieldType& field = const_cast<FieldType&>(constField);
 
         char datasetName[256];
         char patchName[256];
@@ -217,35 +190,20 @@ void Foam::adiosWrite::fieldWrite
         );
 
         // Do the actual write
-        adios_write(fileID_, datasetName, scalarData);
+        adios_write(fileID_, datasetName, field.data());
         //adios_write (fileID_, datasetName, reinterpret_cast<void *>(field.internalField().data());
 
-        // Release memory
-        delete [] scalarData;
-
-        const typename FieldType::GeometricBoundaryField& bf =
-            field.boundaryField();
+        typename FieldType::GeometricBoundaryField& bf = field.boundaryField();
 
         // Do the same for all patches
         forAll(bf, patchI)
         {
-            const typename FieldType::PatchFieldType& pf1 = bf[patchI];
+            typename FieldType::PatchFieldType& pf1 = bf[patchI];
             Info<< "      patchfield " << patchI << ":" << endl;
 #if 0
-            scalarData = new ioScalar[field.size()];
-            /*memcpy (scalarData,
-                    reinterpret_cast<const char *>(pf1.internalField().cdata()),
-                    pf1.byteSize()
-                   );*/
-            forAll(pf1, iter)
-            {
-                scalarData[iter] = pf1[iter];
-            }
-
             // FIXME: what's the name of pf1 in the output?
-            sprintf (patchName, "%s/patch%d", datasetName, patchI);
-            adios_write (fileID_, patchName, scalarData);
-            delete [] scalarData;
+            sprintf(patchName, "%s/patch%d", datasetName, patchI);
+            adios_write(fileID_, patchName, pf1.data());
 #else
             OStringStream ostr;
             ostr<< pf1;
