@@ -81,7 +81,8 @@ class dictionary;
 
 class adiosWrite
 {
-protected:   
+protected:
+
     // Protected classes
 
         //- Class template used for grouping field types
@@ -99,18 +100,14 @@ protected:
 
         };
 
-        // per-region info variables grouped together to be able to create a list of them
-        class regionInfo 
+        // Per-region info variables grouped together to be able to create a list of them
+        class regionInfo
         {
         public:
             regionInfo() {} ;
             ~regionInfo() {};
 
             word name_;
-
-            //- Const reference to fvMesh
-            //const fvMesh& mesh_;
-            //fvMesh& mesh_;
 
             //- Names of volume fields per region to write
             wordReList objectNames_;
@@ -121,45 +118,44 @@ protected:
             //- Which attributes to write for particle data
             wordReList cloudAttribs_;
 
-            // Categorized scalar/vector/tensor fields
+            //- Categorized scalar/vector/tensor fields
             fieldGroup<scalar> scalarFields_;
             fieldGroup<vector> vectorFields_;
             fieldGroup<scalar> surfaceScalarFields_;
 
-            // Array containing number of cells per process (often used list)
+            //- Array containing number of cells per process (often used list)
             List<label> nCells_;
 
-            // number of data points in output Cell array on each process
-            //   calculated in meshDefineCells, used in meshWriteCells
-            //   only the local size is used currently
+            //- Number of data points in output Cell array on each process
+            //  calculated in meshDefineCells, used in meshWriteCells
+            //  only the local size is used currently
             List<label> cellDataSizes_;
 
-            // Array containing number of particles per process (often used list)
+            //- Array containing number of particles per process (often used list)
             List<label> nParticles_;
-            // Sum of above list
+
+            //- Total number of particles (sum of nParticles_ list)
             label nTotalParticles_;
         };
-    
-    
-    // Private data
+
+
+    // Protected data
 
         //- Name of this set of adiosWrite
         word name_;
-        
+
         // Reference to the object registry
         const objectRegistry& obr_;
 
         //- Reference to the primary mesh database
-        const fvMesh& primaryMesh_; //  primaryMesh_(refCast<const fvMesh>(obr)) 
+        const fvMesh& primaryMesh_; //  primaryMesh_(refCast<const fvMesh>(obr))
 
         //- Reference to the time database
         const Time& time_;  // = primaryMesh_.time()
 
         //- List of regions holding all data needed (mesh, names)
-        List<regionInfo> regions_; 
+        List<regionInfo> regions_;
 
-        // Read from dictionary
-            
         //- ADIOS I/O method to use
         word adiosMethod_;
 
@@ -180,140 +176,144 @@ protected:
         int64_t  fileID_;     // file handler from open()
         int64_t  groupID_;    // group of output variables
         uint64_t outputSize_; // number of bytes we write in one timestep by the process
-        
-            
+
+
         // MPI parallel code variables
         MPI_Comm comm_; // Pstream:: does not provide communicator
         // rank = Pstream::myProcNo()
         // number of processors = Pstream::nProcs()
         // process id: Pstream::procID (int procNo), 1 for rank 0
-            
 
-    // Private Member Functions
-      
-      // General functions
-      
-          // Create and open dataset for all data
-          void open();
-          
-          // Close dataset
-          void close();
-          
 
-      
-      // Functions for handling field data
-          
-          // Field define wrapper
-          void fieldDefine (label regionID);
+    // Protected Member Functions
 
-          // Define scalar data
-          void fieldDefineScalar (label regionID);
+        // General functions
 
-          // Define vector data
-          void fieldDefineVector (label regionID);
+            // Create and open dataset for all data
+            void open();
 
-          // Define surface scalar data
-          void fieldDefineSurfaceScalar (label regionID);
+            // Close dataset
+            void close();
 
-          // Field write wrapper
-          void fieldWrite (label regionID);
-          
-          // Write scalar data
-          void fieldWriteScalar (label regionID);
-          
-          // Write vector data
-          void fieldWriteVector (label regionID);
-      
-          // Write surface scalar data
-          void fieldWriteSurfaceScalar (label regionID);
-          
-      
+
+        // Functions for handling field data
+
+            //- Field define wrapper
+            void fieldDefine (label regionID);
+
+            //- Field define for a given type
+            template<class FieldType>
+            void fieldDefine
+            (
+                const fvMesh& mesh,
+                const fieldGroup<typename FieldType::value_type>& fields,
+                const label regionID
+            );
+
+            //- Field write wrapper
+            void fieldWrite (label regionID);
+
+            //- Write data for a given type
+            template<class FieldType>
+            void fieldWrite
+            (
+                const fvMesh& mesh,
+                const fieldGroup<typename FieldType::value_type>& fields,
+                const label regionID
+            );
+
+
       // Functions for handling particle cloud data
-          
-          // Cloud define wrapper
-          void cloudDefine (label regionID);
 
-          // Cloud write wrapper
-          void cloudWrite (label regionID);
-          
-          // Write attributes for cloud particles
-          void cloudWriteAttrib
-          (
-              label myParticles,
-              label offset,
-              label nTot,
-              label nCmps,
-              void* databuf,
-              char* datasetName,
-              ioScalar atype
-          );
-          
-      // Functions for handling mesh 
-      
-          // Mesh define wrapper
-          void meshDefine(label regionID);
+            //- Cloud define wrapper
+            void cloudDefine (label regionID);
 
-          // Define points
-          void meshDefinePoints(const fvMesh& m, label regionID);
+            //- Cloud write wrapper
+            void cloudWrite (label regionID);
 
-          // Define cells
-          void meshDefineCells(const fvMesh& m, label regionID);
+            //- Write attributes for cloud particles
+            void cloudWriteAttrib
+            (
+                label myParticles,
+                label offset,
+                label nTot,
+                label nCmps,
+                void* databuf,
+                char* datasetName,
+                ioScalar atype
+            );
 
-          // Define Boundary meshes
-          void meshDefineBoundaries(const fvMesh& m, label regionID);
 
-          // Mesh write wrapper
-          void meshWrite(label regionID);
-          
-          // Write points
-          void meshWritePoints(const fvMesh& m, label regionID);
-          
-          // Write cells
-          void meshWriteCells(const fvMesh& m, label regionID);
-          
-      // Miscallenous definitions
+        // Functions for handling mesh
 
-          // Read info for one region from it's own dictionary
-          void read_region(const dictionary& dict, regionInfo& r);
+            //- Mesh define wrapper
+            void meshDefine(label regionID);
 
-          //- Append fieldName to the appropriate group
-          label appendFieldGroup(regionInfo& r, const word& fieldName, const word& fieldType);
+            //- Define points
+            void meshDefinePoints(const fvMesh& m, label regionID);
 
-          //- Classify field types, returns the number of fields
-          label classifyFields();
-          //void test_print_obr();
-          
-          //- Disallow default bitwise copy construct
-          adiosWrite(const adiosWrite&);
+            //- Define cells
+            void meshDefineCells(const fvMesh& m, label regionID);
 
-          //- Disallow default bitwise assignment
-          void operator=(const adiosWrite&);
-      
-          // define ADIOS variables (before writing them)
-          void defineVars ();
-          void deleteDefinitions();
-      
-      //- Pointers to cell shape models
-      static const cellModel* unknownModel;
-      static const cellModel* tetModel;
-      static const cellModel* pyrModel;
-      static const cellModel* prismModel;
-      static const cellModel* hexModel;
-      static const cellModel* wedgeModel;
+            //- Define Boundary meshes
+            void meshDefineBoundaries(const fvMesh& m, label regionID);
 
-      
-      // Restart functions
+            //- Mesh write wrapper
+            void meshWrite(label regionID);
 
-        // Read data from a given time
-        // attempt to read data for all variables existing in memory
-        // returns true on success, false on failure
-        bool readData(scalar time);
-        bool readScalarFields(label regionID);
-        bool readClouds(label regionID);
-        bool readADIOSVar ( 
-                ADIOS_FILE *f, ADIOS_SELECTION *sel, 
-                const char * path1, const char * path2, 
-                void * data);
+            //- Write points
+            void meshWritePoints(const fvMesh& m, label regionID);
+
+            //- Write cells
+            void meshWriteCells(const fvMesh& m, label regionID);
+
+
+        // Miscallenous definitions
+
+            //- Read info for one region from it's own dictionary
+            void read_region(const dictionary& dict, regionInfo& r);
+
+            //- Append fieldName to the appropriate group
+            label appendFieldGroup(regionInfo& r, const word& fieldName, const word& fieldType);
+
+            //- Classify field types, returns the number of fields
+            label classifyFields();
+            //void test_print_obr();
+
+            //- Disallow default bitwise copy construct
+            adiosWrite(const adiosWrite&);
+
+            //- Disallow default bitwise assignment
+            void operator=(const adiosWrite&);
+
+            //- Define ADIOS variables (before writing them)
+            void defineVars ();
+            void deleteDefinitions();
+
+        //- Pointers to cell shape models
+        static const cellModel* unknownModel;
+        static const cellModel* tetModel;
+        static const cellModel* pyrModel;
+        static const cellModel* prismModel;
+        static const cellModel* hexModel;
+        static const cellModel* wedgeModel;
+
+
+        // Restart functions
+
+            //- Read data from a given time
+            // attempt to read data for all variables existing in memory
+            // returns true on success, false on failure
+            bool readData(scalar time);
+            bool readScalarFields(label regionID);
+            bool readClouds(label regionID);
+            bool readADIOSVar
+            (
+                ADIOS_FILE *f, ADIOS_SELECTION *sel,
+                const char *path1, const char *path2,
+                void *data
+            );
+
 
 public:
 
@@ -354,9 +354,9 @@ public:
 
         //- Execute at the final time-loop, currently does nothing
         virtual void end();
-        
+
         //- Called when time was set at the end of the Time::operator++,
-        //- currently does nothing
+        //  Note: currently does nothing
         virtual void timeSet();
 
         //- Write a timestep to file
@@ -375,6 +375,12 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#ifdef NoRepository
+    #include "adiosWriteFieldTemplates.C"
+#endif
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
