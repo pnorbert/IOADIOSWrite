@@ -1,8 +1,8 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  2.2.1                                 |
-|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                       |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
@@ -23,7 +23,7 @@ startTime       0;
 
 stopAt          endTime;
 
-endTime         0.05;
+endTime         1;
 
 deltaT          0.005;
 
@@ -46,7 +46,7 @@ timePrecision   6;
 runTimeModifiable false;
 
 functions
-{ 
+{
 
      fieldAverage1
      {
@@ -70,56 +70,49 @@ functions
     {
         functionObjectLibs  ( "libutilityFunctionObjects.so" );
         type                Lambda2;
-        
+
         outputControl       outputTime;
     }
-    
+
     Q
     {
         functionObjectLibs  ( "libutilityFunctionObjects.so" );
         type                Q;
-        
+
         outputControl       outputTime;
     }
-    
-    // Only available if you have swak4Foam installed
-    // (uncomment if you have swak4Foam)
-    /*
+
     vorticity
     {
-        functionObjectLibs  ( "libswakFunctionObjects.so" );
-        type                expressionField;
-        
-        outputControl       outputTime;
+        functionObjectLibs  ( "libutilityFunctionObjects.so" );
+        type                vorticity;
 
-        fieldName           vorticity;
-        expression          "curl(U)";
-        autowrite           true;
+        outputControl       outputTime;
     }
-    */
-    
+
+
     adiosData
     {
         // Write the solution (Eulerian and Lagrangian fields)
         // into an ADIOS container
         type                adiosWrite;
-        
+
         // Where to load it from
         functionObjectLibs  ( "libIOadiosWrite.so" );
-        
-        // We can write mesh, fields and particles from multiple regions 
-        regions 
-        (
-         
+
+        // We can write mesh, fields and particles from multiple regions
+        regions
+        {
+
             // Name of primary region is 'region0'
             region0
             {
                 // Volume fields to write
                 objectNames         ( U p Lambda2 Q vorticity phi pMean pPrime2Mean);
-        
+
                 // Kinematic clouds to write (leave blank to skip)
                 cloudNames          (  );
-        
+
                 // Attributes to write for particles. Valid choices are:
                 //  - origProc        = Original process (from where it was injected)
                 //  - origId          = ID on orignal process
@@ -134,7 +127,7 @@ functions
                 cloudAttribs        (  );
 
             }
-        );
+        }
 
         // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
         // run 'adios_config -m' to see available methods
@@ -144,13 +137,13 @@ functions
         // Parameters for the selected method, default = ""
         //methodparams       "verbose=4;num_aggregators=2;num_ost=2";
         methodparams       "";
-        
+
         // Write interval (in number of iterations)
         writeInterval       5;
 
-        // Restart with output time not step  (set to 0 if no restart needed)
+        // Restart with output time not step (do not use if no restart needed)
         // e.g. 1.725 will look for adiosData/1.725.bp for checkpoint data
-        restartTime         0.05;
+        restartTime         0.5;
     }
 }
 
