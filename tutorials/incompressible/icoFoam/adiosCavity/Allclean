@@ -13,5 +13,5 @@ rm output/*
 foamCleanPolyMesh
 
 # delete ADIOS output
-rm -rf adios*.bp*
+rm -rf adiosData
 
