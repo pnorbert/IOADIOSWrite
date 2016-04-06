@@ -81,38 +81,38 @@ void Foam::adiosWrite::cloudDefine(label regionID)
         char ldimstr[16]; // this process' size
         char offsstr[16]; // this process' offset in global array
 
-        sprintf (gdimstr, "%d", r.nTotalParticles_);
-        sprintf (ldimstr, "%d", myParticles);
-        sprintf (offsstr, "%d", offsets[Pstream::myProcNo()]);
+        sprintf(gdimstr, "%d", r.nTotalParticles_);
+        sprintf(ldimstr, "%d", myParticles);
+        sprintf(offsstr, "%d", offsets[Pstream::myProcNo()]);
 
         // Define all possible output variables, not necessary to write all of them later
-        sprintf (varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
+        sprintf(varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
 
-        adios_define_var (groupID_, "nParticlesPerProc", varPath, adios_integer, NULL, NULL, NULL);
-        adios_define_var (groupID_, "nTotalParticles", varPath, adios_integer, NULL, NULL, NULL);
+        adios_define_var(groupID_, "nParticlesPerProc", varPath, adios_integer, NULL, NULL, NULL);
+        adios_define_var(groupID_, "nTotalParticles", varPath, adios_integer, NULL, NULL, NULL);
         outputSize_ += 2*sizeof(int);
 
         // integer info datasets
-        adios_define_var (groupID_, "origProc", varPath, adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "origId",   varPath, adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "cell",     varPath, adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "currProc", varPath, adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "origProc", varPath, adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "origId",   varPath, adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "cell",     varPath, adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "currProc", varPath, adios_integer, ldimstr, gdimstr, offsstr);
         outputSize_ += 4 * myParticles * sizeof(int);
 
         // scalar datasets
-        adios_define_var (groupID_, "rho", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "d",   varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "age", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "rho", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "d",   varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "age", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
         outputSize_ += 3 * myParticles * sizeof(ioScalar);
 
         // vector datasets
-        sprintf (gdimstr, "%d,3", r.nTotalParticles_);
-        sprintf (ldimstr, "%d,3", myParticles);
-        sprintf (offsstr, "%d,0", offsets[Pstream::myProcNo()]);
-        adios_define_var (groupID_, "position", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "U",        varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var (groupID_, "Us",       varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        outputSize_ += 3 * myParticles * sizeof(ioScalar) * 3;
+        sprintf(gdimstr, "%d,3", r.nTotalParticles_);
+        sprintf(ldimstr, "%d,3", myParticles);
+        sprintf(offsstr, "%d,0", offsets[Pstream::myProcNo()]);
+        adios_define_var(groupID_, "position", varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "U",        varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, "Us",       varPath, ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        outputSize_ += 3*myParticles*sizeof(ioScalar)*3;
     }
 }
 
@@ -138,20 +138,25 @@ void Foam::adiosWrite::cloudWrite(label regionID)
         const basicKinematicCloud& q =
             static_cast<const basicKinematicCloud&>(cloud);
 
-        label myParticles = r.nParticles_[Pstream::myProcNo()];
+        const label myParticles = r.nParticles_[Pstream::myProcNo()];
 
-        char varPath[256], datasetName[256];
-        sprintf (varPath, "region%d/clouds/%s", regionID, r.cloudNames_[cloudI].c_str());
+        fileName varPath
+        (
+            "region" + Foam::name(regionID)/
+            "clouds"/
+            r.cloudNames_[cloudI]
+        );
 
-        // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer writes
+        // Allocate storage for 1-comp. dataset of type 'integer'
         int particleLabel[myParticles];
-
-        sprintf (datasetName, "%s/nParticlesPerProc", varPath);
         int nparts = myParticles;
         int ntotalparts = r.nTotalParticles_;
-        adios_write (fileID_, datasetName, &nparts);
-        sprintf (datasetName, "%s/nTotalParticles", varPath);
-        adios_write (fileID_, datasetName, &ntotalparts);
+
+        fileName datasetName = varPath/"nParticlesPerProc";
+        adios_write(fileID_, datasetName.c_str(), &nparts);
+
+        datasetName = varPath/"nTotalParticles";
+        adios_write(fileID_, datasetName.c_str(), &ntotalparts);
 
         // Write original processor ID
         if (findStrings(r.cloudAttribs_, "origProc"))
@@ -162,8 +167,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleLabel[i++] = pIter().origProc();
             }
-            sprintf (datasetName, "%s/origProc", varPath);
-            adios_write (fileID_, datasetName, particleLabel);
+            datasetName = varPath/"origProc";
+            adios_write(fileID_, datasetName.c_str(), &particleLabel);
         }
 
         // Write original ID
@@ -175,8 +180,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleLabel[i++] = pIter().origId();
             }
-            sprintf (datasetName, "%s/origId", varPath);
-            adios_write (fileID_, datasetName, particleLabel);
+            datasetName = varPath/"origId";
+            adios_write(fileID_, datasetName.c_str(), &particleLabel);
         }
 
         // Write cell number
@@ -188,8 +193,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleLabel[i++] = pIter().cell();
             }
-            sprintf (datasetName, "%s/cell", varPath);
-            adios_write (fileID_, datasetName, particleLabel);
+            datasetName = varPath/"cell";
+            adios_write(fileID_, datasetName.c_str(), &particleLabel);
         }
 
         // Write current process ID
@@ -201,13 +206,12 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleLabel[i++] = Pstream::myProcNo();
             }
-            sprintf (datasetName, "%s/currProc", varPath);
-            adios_write (fileID_, datasetName, particleLabel);
+            datasetName = varPath/"currProc";
+            adios_write(fileID_, datasetName.c_str(), &particleLabel);
         }
 
-        // Allocate memory for 1-comp. dataset of type 'ioScalar'
-        ioScalar* particleScalar1;
-        particleScalar1 = new ioScalar[myParticles];
+        // Allocate storage for 1-comp. dataset of type 'ioScalar'
+        ioScalar particleScalar1[myParticles];
 
         // Write density rho
         if (findStrings(r.cloudAttribs_, "rho"))
@@ -218,8 +222,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleScalar1[i++] = pIter().rho();
             }
-            sprintf (datasetName, "%s/rho", varPath);
-            adios_write (fileID_, datasetName, particleScalar1);
+            datasetName = varPath/"rho";
+            adios_write(fileID_, datasetName.c_str(), &particleScalar1);
         }
 
         // Write diameter d
@@ -231,8 +235,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleScalar1[i++] = pIter().d();
             }
-            sprintf (datasetName, "%s/d", varPath);
-            adios_write (fileID_, datasetName, particleScalar1);
+            datasetName = varPath/"d";
+            adios_write(fileID_, datasetName.c_str(), &particleScalar1);
         }
 
         // Write age
@@ -243,17 +247,13 @@ void Foam::adiosWrite::cloudWrite(label regionID)
             {
                 particleScalar1[i++] = pIter().age();
             }
-            sprintf (datasetName, "%s/age", varPath);
-            adios_write (fileID_, datasetName, particleScalar1);
+            datasetName = varPath/"age";
+            adios_write (fileID_, datasetName.c_str(), &particleScalar1);
         }
 
-        // Free memory for 1-comp. dataset of type 'ioScalar'
-        delete [] particleScalar1;
 
-
-        // Allocate memory for 3-comp. dataset of type 'ioScalar'
-        ioScalar* particleScalar3;
-        particleScalar3 = new ioScalar[myParticles*3];
+        // Allocate storage for 3-comp. dataset of type 'ioScalar'
+        ioScalar particleScalar3[myParticles*3];
 
         // Write position
         if (findStrings(r.cloudAttribs_, "position"))
@@ -266,8 +266,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
                 particleScalar3[3*i+2] = pIter().position().z();
                 i++;
             }
-            sprintf (datasetName, "%s/position", varPath);
-            adios_write (fileID_, datasetName, particleScalar3);
+            datasetName = varPath/"position";
+            adios_write(fileID_, datasetName.c_str(), &particleScalar3);
         }
 
         // Write velocity U
@@ -281,8 +281,8 @@ void Foam::adiosWrite::cloudWrite(label regionID)
                 particleScalar3[3*i+2] = pIter().U().z();
                 i++;
             }
-            sprintf (datasetName, "%s/U", varPath);
-            adios_write (fileID_, datasetName, particleScalar3);
+            datasetName = varPath/"U";
+            adios_write(fileID_, datasetName.c_str(), &particleScalar3);
         }
 
         // Write slip velocity Us = U - Uc
@@ -296,12 +296,9 @@ void Foam::adiosWrite::cloudWrite(label regionID)
                 particleScalar3[3*i+2] = pIter().U().z() - pIter().Uc().z();
                 i++;
             }
-            sprintf (datasetName, "%s/Us", varPath);
-            adios_write (fileID_, datasetName, particleScalar3);
+            datasetName = varPath/"Us";
+            adios_write(fileID_, datasetName.c_str(), &particleScalar3);
         }
-
-        // Free memory for 3-comp. dataset of type 'ioScalar'
-        delete [] particleScalar3;
     }
 }
 

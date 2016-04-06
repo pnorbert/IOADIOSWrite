@@ -281,13 +281,17 @@ void Foam::adiosWrite::execute()
         // file for each
         classifyFields();
 
-        if (!readData(restartTime_))
+        Time& time = const_cast<Time&>(obr_.time());
+        const instantList times = time.times();
+        const label timeIndex = Time::findClosestTimeIndex(times, restartTime_);
+        time.setTime(times[timeIndex], timeIndex);
+
+        if (!readData())
         {
             FatalErrorInFunction
                 << "Restart reading failed for time " << restartTime_
                 << exit(FatalIOError);
         }
-        //runTime.setTime (restartTime_, 0 /* correct timeIndex is needed here */);
     }
 }
 
@@ -374,7 +378,7 @@ void Foam::adiosWrite::write()
         open();
 
         int n = regions_.size();
-        adios_write (fileID_, "nregions", &n);
+        adios_write(fileID_, "nregions", &n);
 
         forAll(regions_, regionID)
         {

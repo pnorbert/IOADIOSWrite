@@ -39,9 +39,6 @@ void Foam::adiosWrite::fieldDefine
 {
     typedef typename FieldType::value_type pType;
 
-    char datasetName[256];
-    char patchName[256];
-    char dimstr[16];
     forAll(fields, fieldI)
     {
         Info<< "    fieldDefine: " << fields[fieldI] << endl;
@@ -49,34 +46,24 @@ void Foam::adiosWrite::fieldDefine
         // Lookup field
         const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
 
-        /*sprintf
-            (
-                datasetName,
-                "FIELDS/%s/processor%i/%s",
-                mesh_.time().timeName().c_str(),
-                Pstream::myProcNo(),
-                fields[fieldI].c_str()
-            );*/
-        sprintf
+        fileName datasetName
         (
-            datasetName,
-            "region%d/fields/%s",
-            regionID,
-            fields[fieldI].c_str()
+            "region" + Foam::name(regionID)/
+            "fields"/
+            fields[fieldI]
         );
 
         // Define a 1D array with field.size as global size, and local (this
         // process') size and with offset 0
         // Type is float or double depending on OpenFoam precision
-        sprintf(dimstr, "%d", field.size()); // global and local dimension of the 1D array
         adios_define_var
         (
             groupID_,
-            datasetName,
+            datasetName.c_str(),
             "",
             ADIOS_SCALAR,
-            dimstr,
-            dimstr,
+            Foam::name(field.size()).c_str(),
+            Foam::name(field.size()).c_str(),
             "0"
         );
 
@@ -96,7 +83,7 @@ void Foam::adiosWrite::fieldDefine
                 << " size=" << pf1.size()
                 << endl;
             // FIXME: what's the name of pf1 in the output?
-            sprintf(patchName, "%s/patch%d", datasetName, patchI);
+            fileName patchName(datasetName/"patch" + Foam::name(patchI));
             /*
             sprintf(dimstr, "%d", pf1.size()); // global and local dimension of the 1D array
             adios_define_var(groupID_, patchName, "", ADIOS_SCALAR, dimstr, dimstr, "0");
@@ -106,40 +93,36 @@ void Foam::adiosWrite::fieldDefine
             OStringStream ostr;
             ostr<< pf1;
             //Info<< "patch " << patchName << " content: " << ostr.str() << endl;
-            sprintf(dimstr, "%d", ostr.str().length()); // global and local dimension of the 1D array
             adios_define_var
             (
                 groupID_,
-                patchName,
+                patchName.c_str(),
                 "",
                 adios_byte,
-                dimstr,
-                dimstr,
+                Foam::name(ostr.str().length()).c_str(),
+                Foam::name(ostr.str().length()).c_str(),
                 "0"
             );
 
             // Define attributes to describe this patch
             //char pathstr[128];
-            char tmpstr[128];
             //sprintf(pathstr, "fields/%s/patch%d", fields[fieldI].c_str(), patchI);
-            sprintf(tmpstr, "%s", pf1.patch().name().c_str());
             adios_define_attribute
             (
                 groupID_,
                 "name",
-                patchName,
+                patchName.c_str(),
                 adios_string,
-                tmpstr,
+                pf1.patch().name().c_str(),
                 NULL
             );
-            sprintf(tmpstr, "%s", pf1.type().c_str());
             adios_define_attribute
             (
                 groupID_,
                 "type",
-                patchName,
+                patchName.c_str(),
                 adios_string,
-                tmpstr,
+                pf1.patch().type().c_str(),
                 NULL
             );
 
@@ -177,20 +160,16 @@ void Foam::adiosWrite::fieldWrite
         // ADIOS requires non-const access to the field for writing (?)
         FieldType& field = const_cast<FieldType&>(constField);
 
-        char datasetName[256];
-        char patchName[256];
-
         // Dataset for this process
-        sprintf
+        fileName datasetName
         (
-            datasetName,
-            "region%d/fields/%s",
-            regionID,
-            fields[fieldI].c_str()
+            "region" + Foam::name(regionID)/
+            "fields"/
+            fields[fieldI]
         );
 
         // Do the actual write
-        adios_write(fileID_, datasetName, field.data());
+        adios_write(fileID_, datasetName.c_str(), field.data());
         //adios_write (fileID_, datasetName, reinterpret_cast<void *>(field.internalField().data());
 
         typename FieldType::GeometricBoundaryField& bf = field.boundaryField();
@@ -210,9 +189,9 @@ void Foam::adiosWrite::fieldWrite
             //pf1.write(ostr);
             // Need to copy constant string to buffer because adios_write() wants non-const
             char *buf = strdup(ostr.str().c_str());
-            sprintf(patchName, "%s/patch%d", datasetName, patchI);
+            fileName patchName(datasetName/"patch" + Foam::name(patchI));
             Info<< "patch " << patchName << " content: " << ostr.str() << endl;
-            adios_write(fileID_, patchName, buf);
+            adios_write(fileID_, patchName.c_str(), buf);
             free(buf);
 #endif
         }

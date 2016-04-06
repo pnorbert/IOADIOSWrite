@@ -305,15 +305,15 @@ protected:
             //- Read data from a given time
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
-            bool readData(scalar time);
-            bool readScalarFields(label regionID);
-            bool readClouds(label regionID);
+            bool readData() const;
+            bool readScalarFields(label regionID) const;
+            bool readClouds(label regionID) const;
             bool readADIOSVar
             (
                 ADIOS_FILE *f, ADIOS_SELECTION *sel,
                 const char *path1, const char *path2,
                 void *data
-            );
+            ) const;
 
 
 public:

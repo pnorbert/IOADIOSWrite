@@ -31,7 +31,7 @@ License
 void Foam::adiosWrite::meshDefine(label regionID)
 {
     Info<< "adiosWrite::meshDefine: region " << regions_[regionID].name_ << endl;
-    
+
     regionInfo& r = regions_[regionID];
     const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
 
@@ -52,14 +52,14 @@ void Foam::adiosWrite::meshDefine(label regionID)
     meshDefinePoints(m, regionID);
     meshDefineCells(m, regionID);
     //meshDefineBoundaries();
-    
+
     Info<< endl;
 }
 
 void Foam::adiosWrite::meshWrite(label regionID)
 {
     Info<< "adiosWrite::meshWrite:" << endl;
-    
+
     const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
 
     char datasetName[80];
@@ -74,7 +74,7 @@ void Foam::adiosWrite::meshWrite(label regionID)
     // Write mesh
     meshWritePoints(m, regionID);
     meshWriteCells(m, regionID);
-    
+
 
     Info<< endl;
 }
@@ -164,7 +164,7 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, label regionID)
     {
         const cellShape& shape = shapes[cellId];
         label mapIndex = shape.model().index();
-    
+
         Info<< "  cell ID = " << cellId << " index = " << mapIndex
             << ". Shape name = " << shape.model().name()
             << ". Shape nPoints = " << shape.model().nPoints()
@@ -197,7 +197,7 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, label regionID)
             (
                 "adiosWrite::meshWriteCells()"
             )   << "Unsupported or unknown cell type for cell number "
-                << cellId 
+                << cellId
                 << endl
                 << exit(FatalError);
         }
@@ -268,12 +268,12 @@ void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, label regionID)
 
 
 void Foam::adiosWrite::meshWritePoints(const fvMesh& m, label regionID)
-{   
+{
     Info<< "  meshWritePoints" << endl;
-    
+
     const pointField& points = m.points();
     char datasetName[80];
-    
+
     // Create a simple array of points (to pass on to adios_write)
     ioScalar pointList[points.size()][3];
     forAll(points, ptI)
@@ -282,7 +282,7 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, label regionID)
         pointList[ptI][1] = points[ptI].y();
         pointList[ptI][2] = points[ptI].z();
     }
-    
+
     sprintf (datasetName, "mesh%d/npoints", regionID);
     int n = points.size();
     adios_write(fileID_, datasetName, &n);
@@ -314,14 +314,12 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
     shapeLookupIndex.insert(tetModel->index(), 6);
     shapeLookupIndex.insert(wedgeModel->index(), 5);
     shapeLookupIndex.insert(unknownModel->index(), 0);
-    
-    
+
     const cellList& cells  = m.cells();
     const cellShapeList& shapes = m.cellShapes();
-    
-    
+
     // Find dataset length for this process and fill dataset in one operation
-    // this will possible give a little overhead w.r.t. storage, but on a 
+    // this will possible give a little overhead w.r.t. storage, but on a
     // hex-dominated mesh, this is OK.
     int j = 0;
     int myDataset[9*cells.size()];
@@ -329,42 +327,38 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
     {
         const cellShape& shape = shapes[cellId];
         label mapIndex = shape.model().index();
-        
+
         // A registered primitive type
         if (shapeLookupIndex.found(mapIndex))
         {
             label shapeId = shapeLookupIndex[mapIndex];
             const labelList& vrtList = shapes[cellId];
-            
+
             myDataset[j] = shapeId; j++;
             forAll(vrtList, i)
             {
                 myDataset[j] = vrtList[i]; j++;
             }
         }
-        
+
         // If the cell is not a basic type, exit with an error
         else
         {
             //myDataset[j] = 0; j++;
             //continue;
-            
-            FatalErrorIn
-            (
-                "adiosWrite::meshWriteCells()"
-            )   << "Unsupported or unknown cell type for cell number "
+
+            FatalErrorInFunction
+                << "Unsupported or unknown cell type for cell number "
                 << cellId << endl
                 << exit(FatalError);
-            
+
         }
     }
-    
-    
-    char datasetName[80];
 
-    sprintf (datasetName, "mesh%d/ncells", regionID);
+
+    fileName datasetName("mesh" + Foam::name(regionID)/"nCells");
     int s =  r.cellDataSizes_[Pstream::myProcNo()];
-    adios_write (fileID_, datasetName, &s);
+    adios_write(fileID_, datasetName.c_str(), &s);
 
     // Write a separate 1D array for the Cell dataset for this process
     /*sprintf
@@ -374,49 +368,32 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
             m.time().timeName().c_str(),
             Pstream::myProcNo()
         );*/
-    sprintf (datasetName, "mesh%d/cells", regionID);
-    adios_write (fileID_, datasetName, myDataset);
+    datasetName = "mesh" + Foam::name(regionID)/"cells";
+    adios_write(fileID_, datasetName.c_str(), myDataset);
 }
 
 
-const Foam::cellModel* Foam::adiosWrite::unknownModel = Foam::cellModeller::
-lookup
-(
-    "unknown"
-);
+const Foam::cellModel* Foam::adiosWrite::unknownModel =
+    Foam::cellModeller::lookup("unknown");
 
 
-const Foam::cellModel* Foam::adiosWrite::tetModel = Foam::cellModeller::
-lookup
-(
-    "tet"
-);
+const Foam::cellModel* Foam::adiosWrite::tetModel =
+    Foam::cellModeller::lookup("tet");
 
 
-const Foam::cellModel* Foam::adiosWrite::pyrModel = Foam::cellModeller::
-lookup
-(
-    "pyr"
-);
+const Foam::cellModel* Foam::adiosWrite::pyrModel =
+    Foam::cellModeller::lookup("pyr");
 
 
-const Foam::cellModel* Foam::adiosWrite::prismModel = Foam::cellModeller::
-lookup
-(
-    "prism"
-);
+const Foam::cellModel* Foam::adiosWrite::prismModel =
+    Foam::cellModeller::lookup("prism");
 
 
-const Foam::cellModel* Foam::adiosWrite::hexModel = Foam::cellModeller::
-lookup
-(
-    "hex"
-);
+const Foam::cellModel* Foam::adiosWrite::hexModel =
+    Foam::cellModeller::lookup("hex");
 
-const Foam::cellModel* Foam::adiosWrite::wedgeModel = Foam::cellModeller::
-lookup
-(
-    "wedge"
-);
+const Foam::cellModel* Foam::adiosWrite::wedgeModel =
+    Foam::cellModeller::lookup("wedge");
+
 
 // ************************************************************************* //

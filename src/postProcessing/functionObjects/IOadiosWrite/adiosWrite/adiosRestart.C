@@ -34,13 +34,12 @@ License
 
 static ADIOS_FILE *f;
 
-bool Foam::adiosWrite::readData(scalar time)
+bool Foam::adiosWrite::readData() const
 {
-    Info<< " Read data of step " << time << endl;
+    Info<< " Read data of step " << obr_.time().timeName() << endl;
     bool succ = true;
-    char fname[256];
-    snprintf(fname, sizeof(fname), "adiosData/%g.bp", time);
-    f = adios_read_open_file(fname, ADIOS_READ_METHOD_BP, comm_);
+    fileName fname("adiosData"/obr_.time().timeName() + ".bp");
+    f = adios_read_open_file(fname.c_str(), ADIOS_READ_METHOD_BP, comm_);
     if (!f)
     {
         return false;
@@ -70,25 +69,26 @@ bool Foam::adiosWrite::readData(scalar time)
     return succ;
 }
 
+
 bool Foam::adiosWrite::readADIOSVar
 (
-    ADIOS_FILE *f, ADIOS_SELECTION *sel,
-    const char *path1, const char *path2,
-    void *data)
+    ADIOS_FILE *f,
+    ADIOS_SELECTION *sel,
+    const char *path1,
+    const char *path2,
+    void *data
+) const
 {
-    char datasetName[256];
+    fileName datasetName(path1);
+
     int err;
     bool succ = true;
     if (path2)
     {
-        sprintf(datasetName, "%s/%s", path1, path2);
-    }
-    else
-    {
-        sprintf(datasetName, "%s", path1);
+        datasetName = datasetName/path2;
     }
 
-    err = adios_schedule_read(f, sel, datasetName, 0, 1, data);
+    err = adios_schedule_read(f, sel, datasetName.c_str(), 0, 1, data);
     if (err)
     {
         WarningInFunction
@@ -106,14 +106,12 @@ bool Foam::adiosWrite::readADIOSVar
 }
 
 
-bool Foam::adiosWrite::readScalarFields(label regionID)
+bool Foam::adiosWrite::readScalarFields(label regionID) const
 {
     bool succ = true;
-    char datasetName[256];
-    char patchName[256];
 
-    // process N will read writeblock N
-    ADIOS_SELECTION * sel = adios_selection_writeblock(Pstream::myProcNo());
+    // Process N will read writeblock N
+    ADIOS_SELECTION *sel = adios_selection_writeblock(Pstream::myProcNo());
 
     const fieldGroup<scalar>& fields(regions_[regionID].scalarFields_);
     const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
@@ -124,18 +122,23 @@ bool Foam::adiosWrite::readScalarFields(label regionID)
         // Lookup field
         volScalarField& field =
             const_cast<volScalarField&>
-           (
+            (
                 mesh.lookupObject<volScalarField>(fields[fieldI])
             );
 
-        sprintf(datasetName, "region%d/fields/%s", regionID, fields[fieldI].c_str());
+        fileName datasetName
+        (
+            "region" + Foam::name(regionID)/
+            "fields"/
+            fields[fieldI]
+        );
 
         {
             // Read into a plain continuous array for the data
             ioScalar data[field.size()];
 
             // Read data from file
-            succ = readADIOSVar(f, sel, datasetName, NULL, &data);
+            succ = readADIOSVar(f, sel, datasetName.c_str(), NULL, &data);
             if (succ)
             {
                 field.internalField() = UList<ioScalar>(&data[0], field.size());
@@ -165,11 +168,11 @@ bool Foam::adiosWrite::readScalarFields(label regionID)
             }
 
             // FIXME: what's the name of psf in the output?
-            sprintf(patchName, "%s/patch%d", datasetName, patchI);
+            fileName patchName(datasetName/"patch" + Foam::name(patchI));
 
             ioScalar data[psf.size()];
 
-            succ = readADIOSVar(f, sel, patchName, NULL, &data);
+            succ = readADIOSVar(f, sel, patchName.c_str(), NULL, &data);
             // Take reference to scalarField so that we can use = operator
             // with UList, over-writing fixedValue if present
             // Note: == operator not available for assignment from UList
@@ -193,17 +196,14 @@ bool Foam::adiosWrite::readScalarFields(label regionID)
 
 
 
-bool Foam::adiosWrite::readClouds(label regionID)
+bool Foam::adiosWrite::readClouds(label regionID) const
 {
     bool succ = true;
-    char varPath[256];
-    char datasetName[256];
-    char patchName[256];
 
     // Process N will read writeblock N
     ADIOS_SELECTION *sel = adios_selection_writeblock(Pstream::myProcNo());
 
-    regionInfo& rInfo = regions_[regionID];
+    const regionInfo& rInfo = regions_[regionID];
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
     forAll(rInfo.cloudNames_, cloudI)
     {
@@ -217,13 +217,17 @@ bool Foam::adiosWrite::readClouds(label regionID)
         //basicKinematicCloud *q =(basicKinematicCloud*) &cloud;
         basicKinematicCloud *q = reinterpret_cast<basicKinematicCloud*>(&cloud);
 
-
-        sprintf(varPath, "region%d/clouds/%s", regionID, rInfo.cloudNames_[cloudI].c_str());
+        fileName varPath
+        (
+            "region" + Foam::name(regionID)/
+            "clouds"/
+            rInfo.cloudNames_[cloudI]
+        );
+        fileName datasetName(varPath/"nParticlesPerProc");
 
         // Get the number of particles saved by this rank
         int nparts = 0;
-        sprintf(datasetName, "%s/nParticlesPerProc", varPath);
-        succ = readADIOSVar(f, sel, datasetName, NULL, &nparts);
+        succ = readADIOSVar(f, sel, datasetName.c_str(), NULL, &nparts);
 
         /*
         // Get the number of particles saved by this rank
@@ -260,14 +264,14 @@ bool Foam::adiosWrite::readClouds(label regionID)
         // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer reads
         int labelData[nparts];
         // Allocate memory for 1-comp. dataset of type 'float/double' for reads
-        ioScalar scalrData[nparts];
+        //ioScalar scalarData[nparts];
 
         // Read original processor ID
         if (findStrings(rInfo.cloudAttribs_, "origProc"))
         {
             Info<< "      dataset origProc " << endl;
             //sprintf(datasetName, "%s/origProc", varPath);
-            succ = readADIOSVar(f, sel, varPath, "origProc", labelData);
+            succ = readADIOSVar(f, sel, varPath.c_str(), "origProc", labelData);
             label i = 0;
             forAllIter(basicKinematicCloud, *q, pIter)
             {

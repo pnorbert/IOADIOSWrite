@@ -1,3 +1,5 @@
+ADIOS_DIR = /home/shelob2/andy/Applications/Utilities/ADIOS/ADIOS-GIT/install/
+
 sinclude $(GENERAL_RULES)/mplib$(WM_MPLIB)
 sinclude $(RULES)/mplib$(WM_MPLIB)
 

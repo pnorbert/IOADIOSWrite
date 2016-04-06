@@ -44,15 +44,15 @@ void Foam::adiosWrite::open()
 
 
     // Find and create filename
-    char dataFile[80];
     char mode[] = "w";
 
-    sprintf(dataFile, "adiosData/%s.bp", obr_.time().timeName().c_str());
+    fileName dataFile("adiosData"/obr_.time().timeName() + ".bp");
 
     // Create/open a new file collectively.
     /*
     static int i = 0;
-    if (timeSteps_ == 0) {
+    if (timeSteps_ == 0)
+    {
         mode[0] = 'w';
         do
         {
@@ -61,7 +61,9 @@ void Foam::adiosWrite::open()
             i++;
         }
         while (isFile(dataFile));
-    } else {
+    }
+    else
+    {
         mode[0] = 'a';
         sprintf(dataFile, "%s%i.bp", name_.c_str(), i);
     }
@@ -70,13 +72,20 @@ void Foam::adiosWrite::open()
     // Print info to terminal
     Info<< "  adiosWrite: Chosen filename " << dataFile << endl << endl;
 
-    int err = adios_open (&fileID_, name_.c_str(), dataFile, mode, comm_);
+    int err = adios_open
+    (
+        &fileID_,
+        name_.c_str(),
+        dataFile.c_str(),
+        mode,
+        comm_
+    );
 
     if (!err)
     {
         // Tell ADIOS how many bytes we are going to write in this step (by this process)
         uint64_t total_size; // user data bytes + metadata, buffer size should be bigger
-        adios_group_size (fileID_, outputSize_, &total_size);
+        adios_group_size(fileID_, outputSize_, &total_size);
     }
     else
     {
