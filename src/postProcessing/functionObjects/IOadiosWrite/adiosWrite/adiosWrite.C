@@ -367,7 +367,7 @@ void Foam::adiosWrite::write()
         {
             // Re-define all variables if mesh has changed
             Info<< "Redefine all variables in ADIOS because primary mesh has "
-                << changed at time " << obr_.time().timeName() << endl;
+                << "changed at time " << obr_.time().timeName() << endl;
             deleteDefinitions();
             defineVars();
         }

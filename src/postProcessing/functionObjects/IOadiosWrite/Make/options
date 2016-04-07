@@ -1,4 +1,4 @@
-ADIOS_DIR = /home/shelob2/andy/Applications/Utilities/ADIOS/ADIOS-GIT/install/
+ADIOS_DIR = $(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/adios-1.9.0
 
 sinclude $(GENERAL_RULES)/mplib$(WM_MPLIB)
 sinclude $(RULES)/mplib$(WM_MPLIB)
@@ -22,4 +22,3 @@ LIB_LIBS = $(PLIBS) \
     -llagrangianIntermediate \
     -lregionModels \
     -lsurfaceFilmModels
-
