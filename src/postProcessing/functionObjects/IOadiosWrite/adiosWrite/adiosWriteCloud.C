@@ -248,7 +248,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
                 particleScalar1[i++] = pIter().age();
             }
             datasetName = varPath/"age";
-            adios_write (fileID_, datasetName.c_str(), &particleScalar1);
+            adios_write(fileID_, datasetName.c_str(), &particleScalar1);
         }
 
 

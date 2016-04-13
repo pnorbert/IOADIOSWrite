@@ -43,6 +43,8 @@ Author
 #ifndef adiosWrite_H
 #define adiosWrite_H
 
+#include "adiosCore.H"
+
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
 #include "fvMesh.H"
@@ -81,6 +83,8 @@ class dictionary;
 \*---------------------------------------------------------------------------*/
 
 class adiosWrite
+:
+    public adiosCore
 {
 protected:
 
@@ -142,9 +146,6 @@ protected:
 
     // Protected data
 
-        //- Name of this set of adiosWrite
-        word name_;
-
         // Reference to the object registry
         const objectRegistry& obr_;
 
@@ -200,11 +201,13 @@ protected:
         // Functions for handling field data
 
             //- Field define wrapper
-            void fieldDefine (label regionID);
+            //  Return the maximum associated stream length
+            size_t fieldDefine(label regionID);
 
             //- Field define for a given type
+            //  Return the maximum associated stream length
             template<class FieldType>
-            void fieldDefine
+            size_t fieldDefine
             (
                 const fvMesh& mesh,
                 const fieldGroup<typename FieldType::value_type>& fields,
@@ -212,7 +215,7 @@ protected:
             );
 
             //- Field write wrapper
-            void fieldWrite (label regionID);
+            void fieldWrite(label regionID);
 
             //- Write data for a given type
             template<class FieldType>
@@ -227,10 +230,10 @@ protected:
       // Functions for handling particle cloud data
 
             //- Cloud define wrapper
-            void cloudDefine (label regionID);
+            void cloudDefine(label regionID);
 
             //- Cloud write wrapper
-            void cloudWrite (label regionID);
+            void cloudWrite(label regionID);
 
             //- Write attributes for cloud particles
             void cloudWriteAttrib
@@ -288,7 +291,7 @@ protected:
             void operator=(const adiosWrite&);
 
             //- Define ADIOS variables (before writing them)
-            void defineVars ();
+            void defineVars();
             void deleteDefinitions();
 
         //- Pointers to cell shape models
@@ -301,6 +304,10 @@ protected:
 
 
         // Restart functions
+
+            bool readData(const fileName&) const;
+
+            bool readData(const instant& when) const;
 
             //- Read data from a given time
             // attempt to read data for all variables existing in memory
@@ -328,7 +335,7 @@ public:
         //  Allow the possibility to load fields from files
         adiosWrite
         (
-            const word& name,
+            const word& groupName,
             const objectRegistry&,
             const dictionary&,
             const bool loadFromFiles = false
@@ -340,12 +347,6 @@ public:
 
 
     // Member Functions
-
-        //- Return name of the adiosWrite
-        virtual const word& name() const
-        {
-            return name_;
-        }
 
         //- Read the adiosWrite data
         virtual void read(const dictionary&);

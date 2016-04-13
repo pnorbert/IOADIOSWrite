@@ -25,12 +25,14 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosWrite.H"
+#include "IOstream.H"
+#include "Ostream.H"
 #include "OStringStream.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 template<class FieldType>
-void Foam::adiosWrite::fieldDefine
+size_t Foam::adiosWrite::fieldDefine
 (
     const fvMesh& mesh,
     const fieldGroup<typename FieldType::value_type>& fields,
@@ -39,19 +41,47 @@ void Foam::adiosWrite::fieldDefine
 {
     typedef typename FieldType::value_type pType;
 
+    OStringStream outbuf(IOstream::BINARY);
+    size_t maxLen = 0;
+
     forAll(fields, fieldI)
     {
-        Info<< "    fieldDefine: " << fields[fieldI] << endl;
-
-        // Lookup field
-        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
-
         fileName datasetName
         (
             "region" + Foam::name(regionID)/
             "fields"/
             fields[fieldI]
         );
+
+        // Lookup field
+        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
+
+        outbuf.rewind();
+        outbuf << field;
+
+        size_t bufLen = outbuf.str().size();
+        maxLen = Foam::max(maxLen, bufLen);
+
+        Info<< "    fieldDefine: " << datasetName;
+        Info<< "  (size " << field.size() << ")";
+        Info<< "  stream-size " << bufLen << endl;
+        Info<< "  stream-content " << outbuf.str() << endl;
+        Info<< "  ----" << endl;
+
+        adios_define_var
+        (
+            groupID_,
+            (
+                "region" + Foam::name(regionID)
+              / "field" / fields[fieldI] / "stream"
+            ).c_str(),                          // name
+            "",                                 // path
+            adios_unsigned_byte,                // data-type
+            Foam::name(bufLen).c_str(),         // dimensions
+            Foam::name(bufLen).c_str(),         // global dimensions
+            "0"                                 // local offsets
+        );
+        outputSize_ += bufLen;
 
         // Define a 1D array with field.size as global size, and local (this
         // process') size and with offset 0
@@ -136,6 +166,10 @@ void Foam::adiosWrite::fieldDefine
             // }
         }
     }
+
+    Info<< "max stream-size: " << maxLen << endl;
+
+    return maxLen;
 }
 
 
@@ -149,17 +183,10 @@ void Foam::adiosWrite::fieldWrite
 {
     typedef typename FieldType::value_type pType;
 
+    OStringStream outbuf(IOstream::BINARY);
+
     forAll(fields, fieldI)
     {
-        Info<< "    fieldWriteScalar: " << fields[fieldI] << endl;
-
-        // Lookup field
-        const FieldType& constField =
-            mesh.lookupObject<FieldType>(fields[fieldI]);
-
-        // ADIOS requires non-const access to the field for writing (?)
-        FieldType& field = const_cast<FieldType&>(constField);
-
         // Dataset for this process
         fileName datasetName
         (
@@ -167,6 +194,30 @@ void Foam::adiosWrite::fieldWrite
             "fields"/
             fields[fieldI]
         );
+
+        // Lookup field
+        const FieldType& constField =
+            mesh.lookupObject<FieldType>(fields[fieldI]);
+
+        Info<< "    fieldWrite: " << fields[fieldI] << endl;
+
+        outbuf.rewind();
+        outbuf << constField;
+
+        // Do the actual write
+        adios_write
+        (
+            fileID_,
+            (
+                "region" + Foam::name(regionID)
+              / "field" / fields[fieldI]/"stream"
+            ).c_str(),
+            outbuf.str().c_str()
+        );
+
+        // ADIOS requires non-const access to the field for writing (?)
+        FieldType& field = const_cast<FieldType&>(constField);
+
 
         // Do the actual write
         adios_write(fileID_, datasetName.c_str(), field.data());

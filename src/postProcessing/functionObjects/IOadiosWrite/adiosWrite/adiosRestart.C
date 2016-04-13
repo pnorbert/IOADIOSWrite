@@ -29,44 +29,173 @@ License
 #include "scalar.H"
 #include "basicKinematicCloud.H"
 #include "emptyFvPatchField.H"
+#include "IStringStream.H"
+
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 static ADIOS_FILE *f;
 
-bool Foam::adiosWrite::readData() const
+bool Foam::adiosWrite::readData(const fileName& bpFile) const
 {
-    Info<< " Read data of step " << obr_.time().timeName() << endl;
-    bool succ = true;
-    fileName fname("adiosData"/obr_.time().timeName() + ".bp");
-    f = adios_read_open_file(fname.c_str(), ADIOS_READ_METHOD_BP, comm_);
+    Info<< " Read data of step " << bpFile << endl;
+    f = adios_read_open_file
+    (
+        bpFile.c_str(),
+        ADIOS_READ_METHOD_BP,
+        comm_
+    );
+
     if (!f)
     {
         return false;
     }
 
-    forAll(regions_, regionID)
+    Info<< "found num-vars: " << f->nvars << endl;
+
+    size_t maxLen = 0;
+
+    // TODO? restrict sizing to current processor!
+    for (int varI=0; varI < f->nvars; ++varI)
     {
-        if (succ)
+        const char * varName = f->var_namelist[varI];
+        ADIOS_VARINFO *varInfo = adios_inq_var(f, varName);
+
+        if (!varInfo)
         {
-            succ = readScalarFields(regionID);
+            WarningInFunction
+                << "Error reading variable information " << varName
+                << " from adios file: "
+                << adios_errmsg() << endl;
+            continue;
         }
-        if (succ)
+
+        size_t bytes = 1; // fallback to scalar
+        if (varInfo->ndim > 0)
         {
-            //succ = readSurfaceScalarFields(regionID);
+            // only consider 1-D storage:
+            bytes = varInfo->dims[0];
+            // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
+            // {
+            //     ... varInfo->dims[dimI];
+            // }
         }
-        if (succ)
+
+        bytes *= adios_type_size(varInfo->type, const_cast<char *>(""));
+
+        Info<< "   >" << varName << endl;
+        Info<< "   >>" << adios_type_to_string(varInfo->type) << endl;
+        Info<< "   bytes>" << bytes << endl;
+
+        maxLen = Foam::max(maxLen, bytes);
+
+        // free ADIOS_VARINFO
+        adios_free_varinfo(varInfo);
+    }
+
+
+    Info<< "   max-length: " << maxLen << endl;
+
+    IStringStream is("", IOstream::BINARY);    // empty buffer to avoid copy-in behaviour
+    char chardata[maxLen];                     // this is our real data buffer
+
+    // attach our buffer
+    is.stdStream().rdbuf()->pubsetbuf(chardata, maxLen);
+
+    // Process N will read writeblock N
+    ADIOS_SELECTION *sel = adios_selection_writeblock(Pstream::myProcNo());
+    {
+
+        fileName varName
+        (
+            "region" + Foam::name(0)
+          / "field" / "pMean" / "stream"
+        );
+
+        // Read into a plain continuous array for the data
+        // char data[maxLen];
+
+        Info<<"read back in " << varName << endl;
+
+        is.rewind();
+        int err = adios_schedule_read(f, sel, varName.c_str(), 0, 1, chardata);
+
+        if (err)
         {
-            //succ = readVectorFields(regionID);
+            WarningInFunction
+                << "Error reading field " << varName
+                << " from adios file: "
+                << adios_errmsg() << endl;
         }
-        if (succ)
+        else
         {
-            succ = readClouds(regionID);
+            err = adios_perform_reads(f, 1); // blocking
+        }
+
+        if (!err)
+        {
+            Info<<"OK" << endl;
+
+            char c;
+            for (int i=0; i < 100; ++i)
+            {
+                is.get(c);
+                Info<< "char: " << c << endl;
+
+                chardata[i] = c ^ '#';
+            }
+
+            is.rewind();
+            for (int i=0; i < 100; ++i)
+            {
+                is.get(c);
+                Info<< "updated: " << c << endl;
+
+                chardata[i] = c ^ '#';
+            }
+
+            is.rewind();
+            for (int i=0; i < 100; ++i)
+            {
+                is.get(c);
+                Info<< "again: " << c << endl;
+            }
         }
     }
 
+    adios_selection_delete(sel);
+
+    // fileNameList varList(f->nvars);
+
+    bool ok = true;
+    forAll(regions_, regionID)
+    {
+        ok =
+        (
+            ok
+         && readScalarFields(regionID)
+         // && readSurfaceScalarFields(regionID)
+         // && readVectorFields(regionID);
+         && readClouds(regionID)
+        );
+    }
+
     adios_read_close(f);
-    return succ;
+    return ok;
+}
+
+
+bool Foam::adiosWrite::readData(const instant& when) const
+{
+    Info<< " Read data of step " << when.name() << endl;
+    return readData(when.name());
+}
+
+
+bool Foam::adiosWrite::readData() const
+{
+    Info<< " Read data of step " << obr_.time().timeName() << endl;
+    return readData(dataDirectory/obr_.time().timeName() + ".bp");
 }
 
 
@@ -81,14 +210,14 @@ bool Foam::adiosWrite::readADIOSVar
 {
     fileName datasetName(path1);
 
-    int err;
-    bool succ = true;
     if (path2)
     {
         datasetName = datasetName/path2;
     }
 
-    err = adios_schedule_read(f, sel, datasetName.c_str(), 0, 1, data);
+    // IstreamAdios(f, sel, name);
+    bool ok = true;
+    int err = adios_schedule_read(f, sel, datasetName.c_str(), 0, 1, data);
     if (err)
     {
         WarningInFunction
@@ -96,13 +225,13 @@ bool Foam::adiosWrite::readADIOSVar
             << " from adios checkpoint file: "
             << adios_errmsg()
             << endl;
-        succ = false;
+        ok = false;
     }
     else
     {
-        err = adios_perform_reads(f, 1);
+        err = adios_perform_reads(f, 1); // blocking
     }
-    return succ;
+    return ok;
 }
 
 
@@ -117,14 +246,22 @@ bool Foam::adiosWrite::readScalarFields(label regionID) const
     const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
     forAll(fields, fieldI)
     {
-        Info<< "    readScalarField: " << fields[fieldI] << endl;
-
         // Lookup field
         volScalarField& field =
             const_cast<volScalarField&>
             (
                 mesh.lookupObject<volScalarField>(fields[fieldI])
             );
+
+        Info<< "    readScalarField: " << field.name() << endl;
+
+
+        fileName varName
+        (
+            "region" + Foam::name(regionID)
+          / "field" / fields[fieldI] / "stream"
+        );
+
 
         fileName datasetName
         (

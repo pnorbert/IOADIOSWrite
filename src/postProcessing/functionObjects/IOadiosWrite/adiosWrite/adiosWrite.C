@@ -93,7 +93,10 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
 
 void Foam::adiosWrite::defineVars()
 {
-    Info<< "adiosWrite::defineVars() has been called at time " << obr_.time().timeName() << endl;
+    Info<< "adiosWrite::defineVars() has been called at time "
+        << obr_.time().timeName()
+        << " time index " << obr_.time().timeIndex() << endl;
+
     outputSize_ = 0;
 
     // Define some info scalars: number of regions
@@ -111,7 +114,10 @@ void Foam::adiosWrite::defineVars()
 
 void Foam::adiosWrite::deleteDefinitions()
 {
-    Info<< "adiosWrite::deleteDefinitions() has been called at time " << obr_.time().timeName() << endl;
+    Info<< "adiosWrite::deleteDefinitions() has been called at time "
+        << obr_.time().timeName()
+        << " time index " << obr_.time().timeIndex() << endl;
+
     // In ADIOS we need to remove all variable definitions in order
     // to make a new list of definitions in case the mesh changes
     adios_delete_vardefs(groupID_);
@@ -122,13 +128,13 @@ void Foam::adiosWrite::deleteDefinitions()
 
 Foam::adiosWrite::adiosWrite
 (
-    const word& name,
+    const word& groupName,
     const objectRegistry& obr,
     const dictionary& dict,
     const bool loadFromFiles
 )
 :
-    name_(name),
+    adiosCore(groupName),
     obr_(obr),
     primaryMesh_(refCast<const fvMesh>(obr)),
     time_(primaryMesh_.time())
@@ -140,7 +146,7 @@ Foam::adiosWrite::adiosWrite
     adios_init_noxml(comm_);
 
     // Create a group to hold all variable definitions
-    adios_declare_group(&groupID_, name_.c_str(), "", adios_flag_yes);
+    adios_declare_group(&groupID_, name().c_str(), "", adios_flag_yes);
 
     // Set next write NOW
     nextWrite_ = 0;
@@ -154,7 +160,8 @@ Foam::adiosWrite::adiosWrite
     (
         groupID_,
         adiosMethod_.c_str(),
-        methodParams_.c_str(), ""
+        methodParams_.c_str(),
+        ""
     );
     adios_allocate_buffer(ADIOS_BUFFER_ALLOC_NOW, 10);
 
@@ -210,7 +217,7 @@ void Foam::adiosWrite::read(const dictionary& dict)
             regions_[nRegion].name_ = iter().keyword();
 
             // Process each region, which should contain the fields and particles
-            read_region (regionDict, regions_[nRegion]);
+            read_region(regionDict, regions_[nRegion]);
             nRegion++;
         }
     }
@@ -225,7 +232,7 @@ void Foam::adiosWrite::read(const dictionary& dict)
     writeInterval_ = dict.lookupOrDefault<label>("writeInterval", 1);
 
     // Lookup chunk size if present
-    adiosMethod_ = dict.lookupOrDefault<word>("adiosMethod", "MPI");
+    adiosMethod_  = dict.lookupOrDefault<word>("adiosMethod", "MPI");
     methodParams_ = dict.lookupOrDefault<string>("methodparams", "");
 
     // Print info to terminal
@@ -286,11 +293,28 @@ void Foam::adiosWrite::execute()
         const label timeIndex = Time::findClosestTimeIndex(times, restartTime_);
         time.setTime(times[timeIndex], timeIndex);
 
-        if (!readData())
+        Info<<"times: " << times << endl;
+
+        Info<<"look for times in " << dataDirectory << endl;
+        const instantList adiosTimes = adiosCore::findTimes();
+
+        Info<<"adios-times: " << adiosTimes << endl;
+        const label adiosTimeIndex = Time::findClosestTimeIndex(adiosTimes, restartTime_);
+        if (adiosTimeIndex < 0)
         {
             FatalErrorInFunction
-                << "Restart reading failed for time " << restartTime_
+                << "No appropriate ADIOS restart found for time " << restartTime_
                 << exit(FatalIOError);
+        }
+        else
+        {
+            Info<<"restart from adios " << adiosTimes[adiosTimeIndex] << endl;
+            if (!readData(adiosTimes[adiosTimeIndex]))
+            {
+                FatalErrorInFunction
+                    << "Restart reading failed for time " << restartTime_
+                    << exit(FatalIOError);
+            }
         }
     }
 }
@@ -300,7 +324,8 @@ void Foam::adiosWrite::end()
 {
     // Nothing to be done here
     Info<< "adiosWrite::end() has been called at time "
-        << obr_.time().timeName() << endl;
+        << obr_.time().timeName()
+        << " time index " << obr_.time().timeIndex() << endl;
 }
 
 
@@ -308,7 +333,8 @@ void Foam::adiosWrite::timeSet()
 {
     // Nothing to be done here
     Info<< "adiosWrite::timeSet() has been called at time "
-        << obr_.time().timeName() << endl;
+        << obr_.time().timeName()
+        << " time index " << obr_.time().timeIndex() << endl;
 }
 
 

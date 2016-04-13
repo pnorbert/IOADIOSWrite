@@ -1,3 +1,4 @@
+adiosWrite/adiosCore.C
 adiosWrite/adiosWrite.C
 adiosWrite/adiosWriteFunctionObject.C
 adiosWrite/adiosWriteGrouping.C

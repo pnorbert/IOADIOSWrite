@@ -75,7 +75,6 @@ void Foam::adiosWrite::meshWrite(label regionID)
     meshWritePoints(m, regionID);
     meshWriteCells(m, regionID);
 
-
     Info<< endl;
 }
 

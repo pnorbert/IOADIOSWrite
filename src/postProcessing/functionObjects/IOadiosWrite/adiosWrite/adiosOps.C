@@ -33,12 +33,11 @@ void Foam::adiosWrite::open()
 {
     Info<< "adiosWrite::open:" << endl;
 
-
     // Create output directory if nonexisting in the beginning
     static bool checkdir = true;
-    if (checkdir && !isDir("adiosData"))
+    if (checkdir && !isDir(dataDirectory))
     {
-        mkDir("adiosData");
+        mkDir(dataDirectory);
     }
     checkdir = false;
 
@@ -46,7 +45,7 @@ void Foam::adiosWrite::open()
     // Find and create filename
     char mode[] = "w";
 
-    fileName dataFile("adiosData"/obr_.time().timeName() + ".bp");
+    fileName dataFile(dataDirectory/obr_.time().timeName() + ".bp");
 
     // Create/open a new file collectively.
     /*
@@ -75,7 +74,7 @@ void Foam::adiosWrite::open()
     int err = adios_open
     (
         &fileID_,
-        name_.c_str(),
+        name().c_str(),     // group-name
         dataFile.c_str(),
         mode,
         comm_
@@ -90,7 +89,7 @@ void Foam::adiosWrite::open()
     else
     {
         WarningInFunction
-            << "File " << name_.c_str()
+            << "File " << name()
             << " could not be created: " << nl
             << adios_get_last_errmsg();
         fileID_ = 0;

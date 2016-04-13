@@ -8,11 +8,12 @@ cd ${0%/*} || exit 1    # run from this directory
 }
 
 # Build OpenFOAM user libraries and applications
-if [ -d src ]; then
-  src/Allwmake
+if [ -d src ]
+then
+    src/Allwmake
 fi
 
-if [ -d applications ]; then
-  applications/Allwmake
+if [ -d applications ]
+then
+    applications/Allwmake
 fi
-
