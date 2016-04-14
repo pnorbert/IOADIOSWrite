@@ -79,9 +79,13 @@ public:
 
         void select(ADIOS_SELECTION *sel);
 
-        bool getDataSet(const fileName& varName, void* data);
+        size_t sizeOf(const char* datasetName, bool verbose=false);
 
-        bool getDataSet(const fileName& varName, IStringStreamBuf& is);
+        size_t sizeOf(const fileName& datasetName, bool verbose=false);
+
+        bool getDataSet(const fileName& datasetName, void* data);
+
+        bool getDataSet(const fileName& datasetName, IStringStreamBuf& is);
 
         void scan(bool verbose=false);
 

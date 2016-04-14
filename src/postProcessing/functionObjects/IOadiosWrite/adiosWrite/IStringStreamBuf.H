@@ -62,6 +62,7 @@ private:
 
     //- Attach storage buffer to the stream and allow nbytes of data
     //  When nbytes=0, allow usage of the entire storage buffer
+    //  Rewinds the buffer for internal consistency
     void resized(size_t nbytes)
     {
         if (nbytes)
@@ -72,8 +73,12 @@ private:
         {
             stdStream().rdbuf()->pubsetbuf(data(), capacity());
         }
-    }
 
+        stdStream().rdbuf()->pubseekpos(0); // rewind
+        stdStream().clear();    // clear old errors
+        setGood();              // resynchronize with internal state
+        lineNumber(0);
+    }
 
 public:
 
@@ -136,8 +141,8 @@ public:
 
 
             //- Reserve allocation space for at least this size
-            //  Attach storage buffer to the stream
             //  Never shrinks the allocated size.
+            //  Attach storage buffer to the stream, automatically rewinds the buffer
             void reserve(const label nbytes = 0)
             {
                 StorageList::reserve(nbytes);

@@ -227,6 +227,17 @@ protected:
                 const label regionID
             );
 
+            //- Read data for a given type
+            template<class FieldType>
+            bool fieldRead
+            (
+                IStringStreamBuf& is,
+                adiosReader::helper& helper,
+                const fvMesh& mesh,
+                const fieldGroup<typename FieldType::value_type>& fields,
+                const label regionId
+            );
+
 
       // Functions for handling particle cloud data
 
@@ -306,23 +317,18 @@ protected:
 
         // Restart functions
 
-            bool readData(const fileName&) const;
-
-            bool readData(const instant& when) const;
+            bool readData(const fileName&);
+            bool readData(const instant& when);
 
             //- Read data from a given time
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
-            bool readData() const;
-            bool readScalarFields(adiosReader::helper&, label regionID) const;
-            bool readClouds(adiosReader::helper&, label regionID) const;
-            bool readADIOSVar
-            (
-                ADIOS_FILE *f, ADIOS_SELECTION *sel,
-                const char *path1, const char *path2,
-                void *data
-            ) const;
+            bool readData();
+            bool readScalarFields(adiosReader::helper&, label regionID);
+            bool readClouds(adiosReader::helper&, label regionID);
 
+            bool readScalarFields(IStringStreamBuf&, adiosReader::helper&, label regionID);
+            // NOT YET: bool readClouds(IStringStreamBuf&, adiosReader::helper&, label regionID);
 
 public:
 
@@ -382,6 +388,7 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #ifdef NoRepository
+    #include "adiosReadFieldTemplates.C"
     #include "adiosWriteFieldTemplates.C"
 #endif
 

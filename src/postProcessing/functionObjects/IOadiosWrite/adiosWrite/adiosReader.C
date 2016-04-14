@@ -51,47 +51,9 @@ void Foam::adiosReader::helper::scan(bool verbose)
         Info<< "adios-file has " << file->nvars << " variables" << endl;
     }
 
-
-    // TODO? restrict sizing to current processor!
     for (int varI=0; varI < file->nvars; ++varI)
     {
-        const char * varName = file->var_namelist[varI];
-        ADIOS_VARINFO *varInfo = adios_inq_var(file, varName);
-
-        if (!varInfo)
-        {
-            WarningInFunction
-                << "Error reading variable information " << varName
-                << " from adios file: "
-                << adios_errmsg() << endl;
-            continue;
-        }
-
-        size_t bytes = 1; // fallback to scalar
-        if (varInfo->ndim > 0)
-        {
-            // only consider 1-D storage:
-            bytes = varInfo->dims[0];
-            // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
-            // {
-            //     ... varInfo->dims[dimI];
-            // }
-        }
-
-        bytes *= adios_type_size(varInfo->type, const_cast<char *>(""));
-
-        if (verbose)
-        {
-            Info<< " variable=" << varName
-                << " nbytes=" << bytes
-                << " type=" << adios_type_to_string(varInfo->type)
-                << endl;
-        }
-
-        maxLen = Foam::max(maxLen, bytes);
-
-        // free ADIOS_VARINFO
-        adios_free_varinfo(varInfo);
+        maxLen = Foam::max(maxLen, sizeOf(file->var_namelist[varI]));
     }
 
     if (verbose)
@@ -164,6 +126,72 @@ void Foam::adiosReader::helper::select(ADIOS_SELECTION *sel)
 }
 
 
+size_t Foam::adiosReader::helper::sizeOf
+(
+    const char* datasetName,
+    bool verbose
+)
+{
+    size_t bytes = 0;
+
+    if (file)
+    {
+        // TODO? restrict sizing to current processor!
+        ADIOS_VARINFO *varInfo = adios_inq_var(file, datasetName);
+
+        if (!varInfo)
+        {
+            WarningInFunction
+                << "Error reading variable information " << datasetName
+                << " from adios file: "
+                << adios_errmsg() << endl;
+
+            return 0;
+        }
+
+        if (varInfo->ndim > 0)
+        {
+            // only consider 1-D storage:
+            bytes = varInfo->dims[0];
+            // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
+            // {
+            //     ... varInfo->dims[dimI];
+            // }
+        }
+        else
+        {
+            bytes = 1; // scalar value
+        }
+
+        bytes *= adios_type_size(varInfo->type, const_cast<char *>(""));
+
+        if (verbose)
+        {
+            Info<< " variable=" << datasetName
+                << " nbytes=" << bytes
+                << " type=" << adios_type_to_string(varInfo->type)
+                << endl;
+        }
+
+        // free ADIOS_VARINFO
+        adios_free_varinfo(varInfo);
+    }
+
+    return bytes;
+}
+
+
+size_t Foam::adiosReader::helper::sizeOf
+(
+    const fileName& datasetName,
+    bool verbose
+)
+{
+    return sizeOf(datasetName.c_str(), verbose);
+}
+
+
+
 bool Foam::adiosReader::helper::getDataSet
 (
     const fileName& datasetName,
@@ -203,7 +231,12 @@ bool Foam::adiosReader::helper::getDataSet
     IStringStreamBuf& is
 )
 {
-    is.rewind();
+    is.reserve(sizeOf(datasetName, true));
+
+    Info<<"getDataSet(" << datasetName << ") ";
+    is.print(Info);
+    Info<< " is.good: " << is.good() << " is.eof: " << is.eof() << endl;
+
     return getDataSet(datasetName, is.data());
 }
 

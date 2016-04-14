@@ -25,7 +25,6 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosWrite.H"
-
 #include "adiosReader.H"
 
 #include "dictionary.H"
@@ -38,7 +37,7 @@ License
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-bool Foam::adiosWrite::readData(const fileName& bpFile) const
+bool Foam::adiosWrite::readData(const fileName& bpFile)
 {
     Info<< " Read data of step " << bpFile << endl;
 
@@ -53,49 +52,7 @@ bool Foam::adiosWrite::readData(const fileName& bpFile) const
     helper.select(adios_selection_writeblock(Pstream::myProcNo()));
 
     helper.scan(true);
-
     IStringStreamBuf is(helper.maxLen, IOstream::BINARY);
-    {
-        fileName varName
-        (
-            "region" + Foam::name(0)
-          / "field" / "pMean" / "stream"
-        );
-
-        // Read into a plain continuous array for the data
-        // char data[maxLen];
-
-        if (helper.getDataSet(varName, is))
-        {
-            Info<<"OK" << endl;
-
-            char c;
-            for (int i=0; i < 100; ++i)
-            {
-                is.get(c);
-                Info<< "char: " << c << endl;
-
-                is.data()[i] = c ^ '#';
-            }
-
-            is.rewind();
-            for (int i=0; i < 100; ++i)
-            {
-                is.get(c);
-                Info<< "updated: " << c << endl;
-
-                is.data()[i] = c ^ '#';
-            }
-
-            is.rewind();
-            for (int i=0; i < 100; ++i)
-            {
-                is.get(c);
-                Info<< "again: " << c << endl;
-            }
-        }
-
-    }
 
     bool ok = true;
     forAll(regions_, regionID)
@@ -103,7 +60,7 @@ bool Foam::adiosWrite::readData(const fileName& bpFile) const
         ok =
         (
             ok
-         && readScalarFields(helper, regionID)
+         && readScalarFields(is, helper, regionID)
          // && readSurfaceScalarFields(helper, regionID)
          // && readVectorFields(helper, regionID);
          && readClouds(helper, regionID)
@@ -115,52 +72,115 @@ bool Foam::adiosWrite::readData(const fileName& bpFile) const
 }
 
 
-bool Foam::adiosWrite::readData(const instant& when) const
+bool Foam::adiosWrite::readData(const instant& when)
 {
     Info<< " Read data of step " << when.name() << endl;
     return readData(when.name());
 }
 
 
-bool Foam::adiosWrite::readData() const
+bool Foam::adiosWrite::readData()
 {
     Info<< " Read data of step " << obr_.time().timeName() << endl;
     return readData(dataDirectory/obr_.time().timeName() + ".bp");
 }
 
 
-bool Foam::adiosWrite::readADIOSVar
+// processor0/0.004/uniform/lagrangian/kinematicCloud/cloudProperties <stream>   - same for all processors
+// processor0/0.004/uniform/lagrangian/kinematicCloud/kinematicCloudOutputProperties <stream>    - same for all processors
+
+// processor0/0.004/lagrangian/kinematicCloud/
+// processor0/0.004/lagrangian/kinematicCloud/{U, age, active, angularMom} ...
+
+bool Foam::adiosWrite::readScalarFields
 (
-    ADIOS_FILE *f,
-    ADIOS_SELECTION *sel,
-    const char *path1,
-    const char *path2,
-    void *data
-) const
+    IStringStreamBuf& is,
+    adiosReader::helper& helper,
+    label regionID
+)
 {
-    fileName datasetName(path1);
-
-    if (path2)
-    {
-        datasetName = datasetName/path2;
-    }
-
-    // IstreamAdios(f, sel, name);
     bool ok = true;
-    int err = adios_schedule_read(f, sel, datasetName.c_str(), 0, 1, data);
-    if (err)
+    const regionInfo& rInfo = regions_[regionID];
+
+#if 1
+    ok = fieldRead<volScalarField>
+    (
+        is,
+        helper,
+        time_.lookupObject<fvMesh>(rInfo.name_),
+        rInfo.scalarFields_,
+        regionID
+    );
+#else
+
+    const fieldGroup<scalar>& fields(rInfo.scalarFields_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+
+    forAll(fields, fieldI)
     {
-        WarningInFunction
-            << "Error reading field " << datasetName
-            << " from adios checkpoint file: "
-            << adios_errmsg()
-            << endl;
-        ok = false;
+        // Lookup field
+        volScalarField& field =
+            const_cast<volScalarField&>
+            (
+                mesh.lookupObject<volScalarField>(fields[fieldI])
+            );
+
+        Info<< "    readScalarField via dictionary: " << field.name() << endl;
+
+        fileName datasetName
+        (
+            "region" + Foam::name(regionID)
+          / "field" / fields[fieldI] / "stream"
+        );
+
+        // is.reserve(sizeOf(datasetName, true));
+        // return getDataSet(datasetName, is.data());
+
+        // Read data from file
+        ok = helper.getDataSet(datasetName, is);
+        if (ok)
+        {
+            Info<<"istream content:" << endl;
+            Info<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
+            is.print(Info);
+            Info<< "is.good: " << is.good() << endl;
+            Info<< "is.eof: " << is.eof() << endl;
+
+            char c;
+            while (is.good() && !is.eof())
+            {
+                is.get(c);
+                Info<< char(c);
+            }
+            Info<< endl << "DONE" << endl;
+
+            // read fields via dictionary
+            // dictionary dict(is);
+
+            // Info<<"dictionary: " << dict << endl;
+
+            // field.readField(dict, "internalField");
+            // field.boundaryField().readField(field, dict.subDict("boundaryField"));
+
+            // TODO: adjust for referenceLevel?
+            //
+            //     if (dict.found("referenceLevel"))
+            //     {
+            //         Type fieldAverage(pTraits<Type>(dict.lookup("referenceLevel")));
+            //         Field<Type>::operator+=(fieldAverage);
+            //         forAll(boundaryField_, patchI)
+            //         {
+            //             boundaryField_[patchI] == boundaryField_[patchI] + fieldAverage;
+            //         }
+            //     }
+        }
+        else
+        {
+            break;
+        }
     }
-    else
-    {
-        err = adios_perform_reads(f, 1); // blocking
-    }
+
+#endif
     return ok;
 }
 
@@ -171,12 +191,15 @@ bool Foam::adiosWrite::readADIOSVar
 // processor0/0.004/lagrangian/kinematicCloud/
 // processor0/0.004/lagrangian/kinematicCloud/{U, age, active, angularMom} ...
 
-bool Foam::adiosWrite::readScalarFields(adiosReader::helper& helper, label regionID) const
+bool Foam::adiosWrite::readScalarFields(adiosReader::helper& helper, label regionID)
 {
     bool ok = true;
 
-    const fieldGroup<scalar>& fields(regions_[regionID].scalarFields_);
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    const regionInfo& rInfo = regions_[regionID];
+
+    const fieldGroup<scalar>& fields(rInfo.scalarFields_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+
     forAll(fields, fieldI)
     {
         // Lookup field
@@ -187,14 +210,6 @@ bool Foam::adiosWrite::readScalarFields(adiosReader::helper& helper, label regio
             );
 
         Info<< "    readScalarField: " << field.name() << endl;
-
-
-        fileName varName
-        (
-            "region" + Foam::name(regionID)
-          / "field" / fields[fieldI] / "stream"
-        );
-
 
         fileName datasetName
         (
@@ -268,12 +283,13 @@ bool Foam::adiosWrite::readScalarFields(adiosReader::helper& helper, label regio
 
 
 
-bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, label regionID) const
+bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, label regionID)
 {
     bool ok = true;
 
     const regionInfo& rInfo = regions_[regionID];
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+
     forAll(rInfo.cloudNames_, cloudI)
     {
         Info<< "    cloud: " << rInfo.cloudNames_[cloudI] << endl;
