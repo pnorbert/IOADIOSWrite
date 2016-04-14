@@ -55,15 +55,13 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
     IStringStreamBuf is(helper.maxLen, IOstream::BINARY);
 
     bool ok = true;
-    forAll(regions_, regionID)
+    forAll(regions_, regionId)
     {
         ok =
         (
             ok
-         && readScalarFields(is, helper, regionID)
-         // && readSurfaceScalarFields(helper, regionID)
-         // && readVectorFields(helper, regionID);
-         && readClouds(helper, regionID)
+         && fieldRead(is, helper, regionId)
+         && readClouds(helper, regionId)
         );
     }
 
@@ -86,6 +84,50 @@ bool Foam::adiosWrite::readData()
 }
 
 
+bool Foam::adiosWrite::fieldRead
+(
+    IStringStreamBuf& is,
+    adiosReader::helper& helper,
+    label regionID
+)
+{
+    const regionInfo& rInfo = regions_[regionID];
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+
+    Pout<< "  adiosWrite::fieldRead: region " << regionID << "="
+        << rInfo.name_ << endl;
+
+    return
+    (
+        fieldRead<volScalarField>
+        (
+            is,
+            helper,
+            mesh,
+            rInfo.scalarFields_,
+            regionID
+        )
+     && fieldRead<volVectorField>
+        (
+            is,
+            helper,
+            mesh,
+            rInfo.vectorFields_,
+            regionID
+        )
+     && fieldRead<surfaceScalarField>
+        (
+            is,
+            helper,
+            mesh,
+            rInfo.surfaceScalarFields_,
+            regionID
+        )
+    );
+}
+
+
+
 // processor0/0.004/uniform/lagrangian/kinematicCloud/cloudProperties <stream>   - same for all processors
 // processor0/0.004/uniform/lagrangian/kinematicCloud/kinematicCloudOutputProperties <stream>    - same for all processors
 
@@ -100,21 +142,19 @@ bool Foam::adiosWrite::readScalarFields
 )
 {
     bool ok = true;
-    const regionInfo& rInfo = regions_[regionID];
 
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
 #if 1
     ok = fieldRead<volScalarField>
     (
         is,
         helper,
-        time_.lookupObject<fvMesh>(rInfo.name_),
-        rInfo.scalarFields_,
+        mesh,
+        regions_[regionID].scalarFields_,
         regionID
     );
 #else
-
-    const fieldGroup<scalar>& fields(rInfo.scalarFields_);
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+    const fieldGroup<scalar>& fields(regions_[regionID].scalarFields_);
 
     forAll(fields, fieldI)
     {

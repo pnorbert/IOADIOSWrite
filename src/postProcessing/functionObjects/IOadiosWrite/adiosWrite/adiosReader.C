@@ -25,6 +25,8 @@ License
 
 #include "adiosReader.H"
 #include "dictionary.H"
+#include "IOstreams.H"
+#include "Pstream.H"
 
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
@@ -151,29 +153,73 @@ size_t Foam::adiosReader::helper::sizeOf
 
         if (varInfo->ndim > 0)
         {
-            // only consider 1-D storage:
-            bytes = varInfo->dims[0];
-            // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
-            // {
-            //     ... varInfo->dims[dimI];
-            // }
+            int nblocks = varInfo->sum_nblocks;
+
+            // Pout<< " variable=" << datasetName
+            //     << " dims: " << varInfo->ndim << " nblocks:"  << nblocks << endl;
+
+            // get block-decomposition
+            int err = adios_inq_var_blockinfo(file, varInfo);
+            if (err)
+            {
+                WarningInFunction
+                    << "Error reading blockinfo for dataset " << datasetName
+                    << " from adios file: "
+                    << adios_errmsg() << endl;
+            }
+            else
+            {
+                ADIOS_VARBLOCK *bp = varInfo->blockinfo;
+
+                for (int blockI=0; blockI < nblocks; ++blockI)
+                {
+                    // Pout<< datasetName
+                    //     << " size:"<< varInfo->dims[0]
+                    //     << " block[" << blockI
+                    //     << "] start:" << *(bp->start)
+                    //     << " count:" << *(bp->count)
+                    //     << " process:" << bp->process_id
+                    //     << " time-index:" << bp->time_index
+                    //     << endl;
+
+                    if (Foam::label(bp->process_id) == Pstream::myProcNo())
+                    {
+                        bytes += *(bp->count);
+                    }
+
+                    ++bp;
+                }
+            }
+
+            // fallback: only consider 1-D storage:
+            if (!bytes)
+            {
+                bytes = varInfo->dims[0];
+
+                // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
+                // {
+                //     ... varInfo->dims[dimI];
+                // }
+            }
         }
         else
         {
+            // Pout<< " variable=" << datasetName << " is scalar" << endl;
+
             bytes = 1; // scalar value
         }
 
-        bytes *= adios_type_size(varInfo->type, const_cast<char *>(""));
+        bytes *= adios_type_size(varInfo->type, const_cast<char*>(""));
 
         if (verbose)
         {
-            Info<< " variable=" << datasetName
+            Pout<< " variable=" << datasetName
                 << " nbytes=" << bytes
                 << " type=" << adios_type_to_string(varInfo->type)
                 << endl;
         }
 
-        // free ADIOS_VARINFO
+        // free ADIOS_VARINFO and any ADIOS_VARBLOCK(s)
         adios_free_varinfo(varInfo);
     }
 
@@ -198,7 +244,7 @@ bool Foam::adiosReader::helper::getDataSet
     void* data
 )
 {
-    Info<<"read data-set " << datasetName << endl;
+    Pout<<"read data-set " << datasetName << endl;
 
     int err = adios_schedule_read
     (
@@ -231,11 +277,13 @@ bool Foam::adiosReader::helper::getDataSet
     IStringStreamBuf& is
 )
 {
-    is.reserve(sizeOf(datasetName, true));
+    size_t nbytes = sizeOf(datasetName, true);
 
-    Info<<"getDataSet(" << datasetName << ") ";
+    is.reserve(nbytes);
+
+    Pout<<"getDataSet(" << datasetName << ") " << nbytes;
     is.print(Info);
-    Info<< " is.good: " << is.good() << " is.eof: " << is.eof() << endl;
+    Pout<< " is.good: " << is.good() << " is.eof: " << is.eof() << endl;
 
     return getDataSet(datasetName, is.data());
 }

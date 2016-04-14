@@ -227,6 +227,14 @@ protected:
                 const label regionID
             );
 
+            //- Field read wrapper
+            bool fieldRead
+            (
+                IStringStreamBuf& is,
+                adiosReader::helper& helper,
+                const label regionId
+            );
+
             //- Read data for a given type
             template<class FieldType>
             bool fieldRead

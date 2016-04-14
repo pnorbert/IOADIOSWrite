@@ -79,8 +79,12 @@ public:
 
         void select(ADIOS_SELECTION *sel);
 
+        //- Return the number of bytes associated with the dataset
+        //  Values are for the current processor.
         size_t sizeOf(const char* datasetName, bool verbose=false);
 
+        //- Return the number of bytes associated with the dataset
+        //  Values are for the current processor.
         size_t sizeOf(const fileName& datasetName, bool verbose=false);
 
         bool getDataSet(const fileName& datasetName, void* data);

@@ -26,6 +26,7 @@ License
 
 #include "adiosWrite.H"
 #include "OStringStream.H"
+#include "IOstreams.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
@@ -67,11 +68,10 @@ size_t Foam::adiosWrite::fieldDefine(label regionID)
 void Foam::adiosWrite::fieldWrite(label regionID)
 {
     const regionInfo& rInfo = regions_[regionID];
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
     Info<< "  adiosWrite::fieldWrite: region " << regionID << "="
         << rInfo.name_ << endl;
-
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
 
     fieldWrite<volScalarField>(mesh, rInfo.scalarFields_, regionID);
     fieldWrite<volVectorField>(mesh, rInfo.vectorFields_, regionID);

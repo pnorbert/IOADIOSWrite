@@ -55,7 +55,7 @@ bool Foam::adiosWrite::fieldRead
             mesh.lookupObject<FieldType>(fields[fieldI])
         );
 
-        Info<< "    readField via dictionary: " << field.name() << endl;
+        Pout<< "    readField via dictionary: " << field.name() << endl;
 
         fileName datasetName
         (
@@ -68,19 +68,19 @@ bool Foam::adiosWrite::fieldRead
         ok = helper.getDataSet(datasetName, is);
         if (ok)
         {
-            Info<<"istream content:" << endl;
-            Info<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
-            is.print(Info);
-            Info<< "is.good: " << is.good() << endl;
-            Info<< "is.eof: " << is.eof() << endl;
+            Pout<<"istream content:" << endl;
+            Pout<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
+            is.print(Pout);
+            Pout<< "is.good: " << is.good() << endl;
+            Pout<< "is.eof: " << is.eof() << endl;
 
             char c;
             while (is.good() && !is.eof())
             {
                 is.get(c);
-                Info<< char(c);
+                Pout<< char(c);
             }
-            Info<< endl << "DONE" << endl;
+            Pout<< endl << "DONE" << endl;
 
             // read fields via dictionary
             // dictionary dict(is);

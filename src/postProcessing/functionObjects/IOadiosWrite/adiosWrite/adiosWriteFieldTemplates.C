@@ -28,6 +28,7 @@ License
 #include "IOstream.H"
 #include "Ostream.H"
 #include "OStringStream.H"
+#include "IOstreams.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
@@ -62,11 +63,11 @@ size_t Foam::adiosWrite::fieldDefine
         size_t bufLen = outbuf.str().size();
         maxLen = Foam::max(maxLen, bufLen);
 
-        Info<< "    fieldDefine: " << datasetName;
-        Info<< "  (size " << field.size() << ")";
-        Info<< "  stream-size " << bufLen << endl;
-        Info<< "  stream-content " << outbuf.str() << endl;
-        Info<< "  ----" << endl;
+        Pout<< "    fieldDefine: " << datasetName
+            << "  (size " << field.size() << ")"
+            << "  stream-size " << bufLen << endl
+            << "  stream-content " << outbuf.str() << endl
+            << "  ----" << endl;
 
         adios_define_var
         (
@@ -167,7 +168,7 @@ size_t Foam::adiosWrite::fieldDefine
         }
     }
 
-    Info<< "max stream-size: " << maxLen << endl;
+    Pout<< "max stream-size: " << maxLen << endl;
 
     return maxLen;
 }
