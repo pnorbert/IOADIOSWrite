@@ -110,10 +110,14 @@ protected:
         class regionInfo
         {
         public:
-            regionInfo() {} ;
+            regionInfo() {};
             ~regionInfo() {};
 
+            //- Name of the region
             word name_;
+
+            //- Index of the region in the list
+            label index_;
 
             //- Names of volume fields per region to write
             wordReList objectNames_;
@@ -203,7 +207,7 @@ protected:
 
             //- Field define wrapper
             //  Return the maximum associated stream length
-            size_t fieldDefine(label regionID);
+            size_t fieldDefine(const regionInfo&);
 
             //- Field define for a given type
             //  Return the maximum associated stream length
@@ -211,20 +215,20 @@ protected:
             size_t fieldDefine
             (
                 const fvMesh& mesh,
-                const fieldGroup<typename FieldType::value_type>& fields,
-                const label regionID
+                const regionInfo&,
+                const fieldGroup<typename FieldType::value_type>& fields
             );
 
             //- Field write wrapper
-            void fieldWrite(label regionID);
+            void fieldWrite(const regionInfo&);
 
             //- Write data for a given type
             template<class FieldType>
             void fieldWrite
             (
                 const fvMesh& mesh,
-                const fieldGroup<typename FieldType::value_type>& fields,
-                const label regionID
+                const regionInfo&,
+                const fieldGroup<typename FieldType::value_type>& fields
             );
 
             //- Field read wrapper
@@ -250,10 +254,10 @@ protected:
       // Functions for handling particle cloud data
 
             //- Cloud define wrapper
-            void cloudDefine(label regionID);
+            void cloudDefine(regionInfo&);
 
             //- Cloud write wrapper
-            void cloudWrite(label regionID);
+            void cloudWrite(const regionInfo&);
 
             //- Write attributes for cloud particles
             void cloudWriteAttrib
@@ -271,34 +275,34 @@ protected:
         // Functions for handling mesh
 
             //- Mesh define wrapper
-            void meshDefine(label regionID);
+            void meshDefine(regionInfo&);
 
             //- Define points
-            void meshDefinePoints(const fvMesh& m, label regionID);
+            void meshDefinePoints(const fvMesh&, regionInfo&);
 
             //- Define cells
-            void meshDefineCells(const fvMesh& m, label regionID);
+            void meshDefineCells(const fvMesh&, regionInfo&);
 
             //- Define Boundary meshes
-            void meshDefineBoundaries(const fvMesh& m, label regionID);
+            void meshDefineBoundaries(const fvMesh&, regionInfo&);
 
             //- Mesh write wrapper
-            void meshWrite(label regionID);
+            void meshWrite(const regionInfo&);
 
             //- Write points
-            void meshWritePoints(const fvMesh& m, label regionID);
+            void meshWritePoints(const fvMesh&, const regionInfo&);
 
             //- Write cells
-            void meshWriteCells(const fvMesh& m, label regionID);
+            void meshWriteCells(const fvMesh&, const regionInfo&);
 
 
         // Miscallenous definitions
 
             //- Read info for one region from it's own dictionary
-            void read_region(const dictionary& dict, regionInfo& r);
+            void read_region(const dictionary& dict, regionInfo&);
 
             //- Append fieldName to the appropriate group
-            label appendFieldGroup(regionInfo& r, const word& fieldName, const word& fieldType);
+            label appendFieldGroup(regionInfo&, const word& fieldName, const word& fieldType);
 
             //- Classify field types, returns the number of fields
             label classifyFields();

@@ -30,52 +30,49 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-size_t Foam::adiosWrite::fieldDefine(label regionID)
+size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 {
-    const regionInfo& rInfo = regions_[regionID];
-
-    Info<< "  adiosWrite::fieldDefine: region " << regionID << "="
-        << rInfo.name_ << endl;
+    Info<< "  adiosWrite::fieldDefine: region "
+        << rInfo.index_ << "=" << rInfo.name_ << endl;
 
     adios_define_attribute
     (
         groupID_,
         "name",
-        ("region" + Foam::name(regionID)).c_str(),
+        ("region" + Foam::name(rInfo.index_)).c_str(),
         adios_string,
-        regions_[regionID].name_.c_str(),
+        rInfo.name_.c_str(),
         NULL
     );
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
     size_t bufLen = 0;
     size_t maxLen = 0;
 
-    bufLen = fieldDefine<volScalarField>(mesh, rInfo.scalarFields_, regionID);
+    bufLen = fieldDefine<volScalarField>(mesh, rInfo, rInfo.scalarFields_);
     maxLen = Foam::max(maxLen, bufLen);
 
-    bufLen = fieldDefine<volVectorField>(mesh, rInfo.vectorFields_, regionID);
+    bufLen = fieldDefine<volVectorField>(mesh, rInfo, rInfo.vectorFields_);
     maxLen = Foam::max(maxLen, bufLen);
 
-    bufLen = fieldDefine<surfaceScalarField>(mesh, rInfo.surfaceScalarFields_, regionID);
+    bufLen = fieldDefine<surfaceScalarField>(mesh, rInfo, rInfo.surfaceScalarFields_);
     maxLen = Foam::max(maxLen, bufLen);
 
     return maxLen;
 }
 
 
-void Foam::adiosWrite::fieldWrite(label regionID)
+void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 {
-    const regionInfo& rInfo = regions_[regionID];
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
-    Info<< "  adiosWrite::fieldWrite: region " << regionID << "="
-        << rInfo.name_ << endl;
+    Info<< "  adiosWrite::fieldWrite: region "
+        << rInfo.index_ << "=" << rInfo.name_ << endl;
 
-    fieldWrite<volScalarField>(mesh, rInfo.scalarFields_, regionID);
-    fieldWrite<volVectorField>(mesh, rInfo.vectorFields_, regionID);
-    fieldWrite<surfaceScalarField>(mesh, rInfo.surfaceScalarFields_, regionID);
+    fieldWrite<volScalarField>(mesh, rInfo, rInfo.scalarFields_);
+    fieldWrite<volVectorField>(mesh, rInfo, rInfo.vectorFields_);
+    fieldWrite<surfaceScalarField>(mesh, rInfo, rInfo.surfaceScalarFields_);
 }
 
 

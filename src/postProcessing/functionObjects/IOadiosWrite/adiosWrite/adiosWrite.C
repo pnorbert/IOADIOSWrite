@@ -103,11 +103,13 @@ void Foam::adiosWrite::defineVars()
     adios_define_var(groupID_, "nregions", "", adios_integer, NULL, NULL, NULL);
     outputSize_ += 4;
 
-    forAll(regions_, regionID)
+    forAll(regions_, regionI)
     {
-        meshDefine(regionID);
-        fieldDefine(regionID);
-        cloudDefine(regionID);
+        regionInfo& rInfo = regions_[regionI];
+
+        meshDefine(rInfo);
+        fieldDefine(rInfo);
+        cloudDefine(rInfo);
     }
 }
 
@@ -214,11 +216,12 @@ void Foam::adiosWrite::read(const dictionary& dict)
             }
 
             const dictionary& regionDict = iter().dict();
-            regions_[nRegion].name_ = iter().keyword();
+            regions_[nRegion].index_ = nRegion;
+            regions_[nRegion].name_  = iter().keyword();
 
             // Process each region, which should contain the fields and particles
             read_region(regionDict, regions_[nRegion]);
-            nRegion++;
+            ++nRegion;
         }
     }
     else
@@ -406,19 +409,21 @@ void Foam::adiosWrite::write()
         int n = regions_.size();
         adios_write(fileID_, "nregions", &n);
 
-        forAll(regions_, regionID)
+        forAll(regions_, regionI)
         {
+            regionInfo& rInfo = regions_[regionI];
+
             // Re-write mesh if dynamic or first time
             if (timeSteps_ == 0 || primaryMesh_.changing())
             {
-                meshWrite(regionID);
+                meshWrite(rInfo);
             }
 
             // Write field data
-            fieldWrite(regionID);
+            fieldWrite(rInfo);
 
             // Write cloud data
-            cloudWrite(regionID);
+            cloudWrite(rInfo);
         }
 
         // Close the ADIOS dataset at every timestep. It must be closed!

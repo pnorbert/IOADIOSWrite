@@ -26,13 +26,34 @@ License
 #include "adiosWrite.H"
 #include "cellModeller.H"
 
+// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+
+const Foam::cellModel* Foam::adiosWrite::unknownModel =
+    Foam::cellModeller::lookup("unknown");
+
+const Foam::cellModel* Foam::adiosWrite::tetModel =
+    Foam::cellModeller::lookup("tet");
+
+const Foam::cellModel* Foam::adiosWrite::pyrModel =
+    Foam::cellModeller::lookup("pyr");
+
+const Foam::cellModel* Foam::adiosWrite::prismModel =
+    Foam::cellModeller::lookup("prism");
+
+const Foam::cellModel* Foam::adiosWrite::hexModel =
+    Foam::cellModeller::lookup("hex");
+
+const Foam::cellModel* Foam::adiosWrite::wedgeModel =
+    Foam::cellModeller::lookup("wedge");
+
+
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void Foam::adiosWrite::meshDefine(label regionID)
+void Foam::adiosWrite::meshDefine(regionInfo& r)
 {
-    Info<< "adiosWrite::meshDefine: region " << regions_[regionID].name_ << endl;
+    Info<< "adiosWrite::meshDefine: region "
+        << r.index_ << "=" << r.name_ << endl;
 
-    regionInfo& r = regions_[regionID];
     const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
 
     // Find over all (global) number of cells per process
@@ -42,43 +63,49 @@ void Foam::adiosWrite::meshDefine(label regionID)
 
     // Define time and time index as single scalar (written from rank 0)
     char datasetName[80];
-    sprintf (datasetName, "mesh%d/time", regionID);
-    adios_define_var (groupID_, datasetName,    "", adios_integer, NULL, NULL, NULL);
-    sprintf (datasetName, "mesh%d/timeidx", regionID);
-    adios_define_var (groupID_, datasetName, "", adios_integer, NULL, NULL, NULL);
+
+    sprintf(datasetName, "mesh%d/time", r.index_);
+    adios_define_var(groupID_, datasetName, "", adios_integer, NULL, NULL, NULL);
+
+    sprintf(datasetName, "mesh%d/timeidx", r.index_);
+    adios_define_var(groupID_, datasetName,  "", adios_integer, NULL, NULL, NULL);
+
     outputSize_ += 2*4; // size of adios_integer
 
     // Define mesh
-    meshDefinePoints(m, regionID);
-    meshDefineCells(m, regionID);
+    meshDefinePoints(m, r);
+    meshDefineCells(m, r);
     //meshDefineBoundaries();
 
     Info<< endl;
 }
 
-void Foam::adiosWrite::meshWrite(label regionID)
+
+void Foam::adiosWrite::meshWrite(const regionInfo& r)
 {
     Info<< "adiosWrite::meshWrite:" << endl;
 
-    const fvMesh& m = time_.lookupObject<fvMesh>(regions_[regionID].name_);
+    const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
 
     char datasetName[80];
-    sprintf (datasetName, "mesh%d/time", regionID);
+
+    sprintf(datasetName, "mesh%d/time", r.index_);
     int t = m.time().timeOutputValue();
     adios_write(fileID_, datasetName, &t);
 
-    sprintf (datasetName, "mesh%d/timeidx", regionID);
+    sprintf(datasetName, "mesh%d/timeidx", r.index_);
     t = m.time().timeIndex();
     adios_write(fileID_, datasetName, &t);
 
     // Write mesh
-    meshWritePoints(m, regionID);
-    meshWriteCells(m, regionID);
+    meshWritePoints(m, r);
+    meshWriteCells(m, r);
 
     Info<< endl;
 }
 
-void Foam::adiosWrite::meshDefinePoints(const fvMesh& m, label regionID)
+
+void Foam::adiosWrite::meshDefinePoints(const fvMesh& m, regionInfo& r)
 {
     Info<< "  meshDefinePoints" << endl;
 
@@ -108,10 +135,10 @@ void Foam::adiosWrite::meshDefinePoints(const fvMesh& m, label regionID)
     char offstr[16];
 
     // Define a 1D array to store number of points on each processor
-    sprintf (datasetName, "mesh%d/npoints", regionID);
-    sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
-    sprintf (offstr,  "%d", Pstream::myProcNo());    // offsets of this process in the 1D array
-    adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+    sprintf(datasetName, "mesh%d/npoints", r.index_);
+    sprintf(gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
+    sprintf(offstr,  "%d", Pstream::myProcNo());    // offsets of this process in the 1D array
+    adios_define_var(groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
     outputSize_ += 4; // size of adios_integer
 
     /*
@@ -123,23 +150,21 @@ void Foam::adiosWrite::meshDefinePoints(const fvMesh& m, label regionID)
     		Pstream::myProcNo()
     );
     */
-    sprintf (datasetName, "mesh%d/points", regionID);
-    sprintf (ldimstr, "%d,3", points.size()); // local dimension of the 2D sub-array (n points x 3 coordinates)
+    sprintf(datasetName, "mesh%d/points", r.index_);
+    sprintf(ldimstr, "%d,3", points.size());  // local dimension of the 2D sub-array (n points x 3 coordinates)
     //sprintf (gdimstr, "%d,3", nTotalPoints);  // global dimension of the 2D array (N points x 3 coordinates)
     //sprintf (offstr,  "%d,0", myoffset);      // offsets of this process in the 2D array
-    //adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, gdimstr, offstr);
-    adios_define_var (groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, "", "");
+    //adios_define_var groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, gdimstr, offstr);
+    adios_define_var(groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, "", "");
 
     // count the total size we are going to write from this process
     outputSize_ += points.size() * 3 * sizeof(ioScalar);
 }
 
 
-void Foam::adiosWrite::meshDefineCells(const fvMesh& m, label regionID)
+void Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
 {
     Info<< "  meshDefineCells" << endl;
-
-    regionInfo& r = regions_[regionID];
 
     // Map shapes OpenFOAM->XDMF
     Map<label> shapeLookupIndex;
@@ -217,7 +242,7 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, label regionID)
 
     // Define a 1D array to store number of cells of each processor
     //sprintf (datasetName, "MESH/%s/nCells", m.time().timeName().c_str());
-    sprintf (datasetName, "mesh%d/ncells", regionID);
+    sprintf (datasetName, "mesh%d/ncells", r.index_);
     sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
     sprintf (offstr,  "%d", Pstream::myProcNo());      // offsets of this process in the 1D array
     adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
@@ -232,13 +257,14 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, label regionID)
             Pstream::myProcNo()
         );
     */
-    sprintf (datasetName, "mesh%d/cells", regionID);
+    sprintf (datasetName, "mesh%d/cells", r.index_);
     sprintf (ldimstr, "%d", r.cellDataSizes_[Pstream::myProcNo()]);
     adios_define_var (groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
     outputSize_ += r.cellDataSizes_[Pstream::myProcNo()] * 4; // size of adios_integer
- }
+}
 
-void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, label regionID)
+
+void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
 {
     /*
     Info<< "  meshDefineBoundaries" << endl;
@@ -266,7 +292,7 @@ void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, label regionID)
 }
 
 
-void Foam::adiosWrite::meshWritePoints(const fvMesh& m, label regionID)
+void Foam::adiosWrite::meshWritePoints(const fvMesh& m, const regionInfo& r)
 {
     Info<< "  meshWritePoints" << endl;
 
@@ -282,7 +308,7 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, label regionID)
         pointList[ptI][2] = points[ptI].z();
     }
 
-    sprintf (datasetName, "mesh%d/npoints", regionID);
+    sprintf(datasetName, "mesh%d/npoints", r.index_);
     int n = points.size();
     adios_write(fileID_, datasetName, &n);
 
@@ -294,16 +320,14 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, label regionID)
             m.time().timeName().c_str(),
             Pstream::myProcNo()
         );*/
-    sprintf (datasetName, "mesh%d/points", regionID);
+    sprintf(datasetName, "mesh%d/points", r.index_);
     adios_write(fileID_, datasetName, pointList);
 }
 
 
-void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
+void Foam::adiosWrite::meshWriteCells(const fvMesh& m, const regionInfo& r)
 {
     Info<< "  meshWriteCells" << endl;
-
-    regionInfo& r = regions_[regionID];
 
     // Map shapes OpenFOAM->XDMF
     Map<label> shapeLookupIndex;
@@ -355,8 +379,8 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
     }
 
 
-    fileName datasetName("mesh" + Foam::name(regionID)/"nCells");
-    int s =  r.cellDataSizes_[Pstream::myProcNo()];
+    fileName datasetName("mesh" + Foam::name(r.index_)/"nCells");
+    int s = r.cellDataSizes_[Pstream::myProcNo()];
     adios_write(fileID_, datasetName.c_str(), &s);
 
     // Write a separate 1D array for the Cell dataset for this process
@@ -367,32 +391,9 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, label regionID)
             m.time().timeName().c_str(),
             Pstream::myProcNo()
         );*/
-    datasetName = "mesh" + Foam::name(regionID)/"cells";
+    datasetName = "mesh" + Foam::name(r.index_)/"cells";
     adios_write(fileID_, datasetName.c_str(), myDataset);
 }
-
-
-const Foam::cellModel* Foam::adiosWrite::unknownModel =
-    Foam::cellModeller::lookup("unknown");
-
-
-const Foam::cellModel* Foam::adiosWrite::tetModel =
-    Foam::cellModeller::lookup("tet");
-
-
-const Foam::cellModel* Foam::adiosWrite::pyrModel =
-    Foam::cellModeller::lookup("pyr");
-
-
-const Foam::cellModel* Foam::adiosWrite::prismModel =
-    Foam::cellModeller::lookup("prism");
-
-
-const Foam::cellModel* Foam::adiosWrite::hexModel =
-    Foam::cellModeller::lookup("hex");
-
-const Foam::cellModel* Foam::adiosWrite::wedgeModel =
-    Foam::cellModeller::lookup("wedge");
 
 
 // ************************************************************************* //

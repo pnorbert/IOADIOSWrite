@@ -36,8 +36,8 @@ template<class FieldType>
 size_t Foam::adiosWrite::fieldDefine
 (
     const fvMesh& mesh,
-    const fieldGroup<typename FieldType::value_type>& fields,
-    const label regionID
+    const regionInfo& rInfo,
+    const fieldGroup<typename FieldType::value_type>& fields
 )
 {
     typedef typename FieldType::value_type pType;
@@ -49,9 +49,8 @@ size_t Foam::adiosWrite::fieldDefine
     {
         fileName datasetName
         (
-            "region" + Foam::name(regionID)/
-            "fields"/
-            fields[fieldI]
+            "region" + Foam::name(rInfo.index_)
+          / "fields" / fields[fieldI]
         );
 
         // Lookup field
@@ -73,7 +72,7 @@ size_t Foam::adiosWrite::fieldDefine
         (
             groupID_,
             (
-                "region" + Foam::name(regionID)
+                "region" + Foam::name(rInfo.index_)
               / "field" / fields[fieldI] / "stream"
             ).c_str(),                          // name
             "",                                 // path
@@ -178,11 +177,11 @@ template<class FieldType>
 void Foam::adiosWrite::fieldWrite
 (
     const fvMesh& mesh,
-    const fieldGroup<typename FieldType::value_type>& fields,
-    const label regionID
+    const regionInfo& rInfo,
+    const fieldGroup<typename FieldType::value_type>& fields
 )
 {
-    typedef typename FieldType::value_type pType;
+    // typedef typename FieldType::value_type pType;
 
     OStringStream outbuf(IOstream::BINARY);
 
@@ -191,9 +190,8 @@ void Foam::adiosWrite::fieldWrite
         // Dataset for this process
         fileName datasetName
         (
-            "region" + Foam::name(regionID)/
-            "fields"/
-            fields[fieldI]
+            "region" + Foam::name(rInfo.index_)
+          / "fields" / fields[fieldI]
         );
 
         // Lookup field
@@ -210,8 +208,8 @@ void Foam::adiosWrite::fieldWrite
         (
             fileID_,
             (
-                "region" + Foam::name(regionID)
-              / "field" / fields[fieldI]/"stream"
+                "region" + Foam::name(rInfo.index_)
+              / "field" / fields[fieldI] / "stream"
             ).c_str(),
             outbuf.str().c_str()
         );
