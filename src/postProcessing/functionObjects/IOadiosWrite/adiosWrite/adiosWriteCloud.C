@@ -126,6 +126,7 @@ void Foam::adiosWrite::cloudWrite(label regionID)
     forAll(r.cloudNames_, cloudI)
     {
         Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
+        Info<< "    Properties " <<  basicKinematicCloud::particleType::propertyList() << endl;
 
         // If the cloud contains no particles, jump to the next cloud
         if (r.nTotalParticles_ == 0)

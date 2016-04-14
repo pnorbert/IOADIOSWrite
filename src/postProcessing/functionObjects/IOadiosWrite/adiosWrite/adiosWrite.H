@@ -44,6 +44,7 @@ Author
 #define adiosWrite_H
 
 #include "adiosCore.H"
+#include "adiosReader.H"
 
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
@@ -313,8 +314,8 @@ protected:
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
             bool readData() const;
-            bool readScalarFields(label regionID) const;
-            bool readClouds(label regionID) const;
+            bool readScalarFields(adiosReader::helper&, label regionID) const;
+            bool readClouds(adiosReader::helper&, label regionID) const;
             bool readADIOSVar
             (
                 ADIOS_FILE *f, ADIOS_SELECTION *sel,
