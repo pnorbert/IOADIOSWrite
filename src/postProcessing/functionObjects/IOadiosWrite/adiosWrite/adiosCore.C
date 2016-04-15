@@ -39,6 +39,7 @@ Foam::adiosCore::dataDirectory("adiosData");
 const Foam::word
 Foam::adiosCore::fileExt("bp");
 
+
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 Foam::adiosCore::adiosCore

@@ -30,6 +30,10 @@ License
 #include "OStringStream.H"
 #include "IOstreams.H"
 
+#include "OCountStream.H"
+#include "OCompactCountStream.H"
+#include "OCompactStringStream.H"
+
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 template<class FieldType>
@@ -40,9 +44,12 @@ size_t Foam::adiosWrite::fieldDefine
     const fieldGroup<typename FieldType::value_type>& fields
 )
 {
+#ifdef FOAM_ADIOS_PATCH_WRITE
     typedef typename FieldType::value_type pType;
+#endif
+    OCountStream os(adiosCore::strFormat);
+    // OCompactStringStream os(adiosCore::strFormat);
 
-    OStringStream outbuf(IOstream::BINARY);
     size_t maxLen = 0;
 
     forAll(fields, fieldI)
@@ -59,16 +66,19 @@ size_t Foam::adiosWrite::fieldDefine
           / "fields" / fields[fieldI]
         );
 #endif
-        outbuf.rewind();
-        outbuf << field;
-
-        size_t bufLen = outbuf.str().size();
+        os.rewind();
+        os << field;
+        size_t bufLen = os.size();
         maxLen = Foam::max(maxLen, bufLen);
+
+        OStringStream check(adiosCore::strFormat);
+        check << field;
+        size_t oslen = check.str().size();
 
         Pout<< "    fieldDefine: " << varPath
             << "  (size " << field.size() << ")"
-            << "  stream-size " << bufLen << endl
-            << "  stream-content " << outbuf.str() << endl
+            << "  stream-size " << oslen << " (counted " << bufLen << ")" << endl
+            << "  stream-content " << check.str().c_str() << endl
             << "  ----" << endl;
 
         adios_define_var
@@ -200,8 +210,6 @@ void Foam::adiosWrite::fieldWrite
 {
     // typedef typename FieldType::value_type pType;
 
-    OStringStream outbuf(IOstream::BINARY);
-
     forAll(fields, fieldI)
     {
         // Lookup field
@@ -217,17 +225,19 @@ void Foam::adiosWrite::fieldWrite
           / "fields" / fields[fieldI]
         );
 #endif
-        outbuf.rewind();
-        outbuf << field;
 
         Info<< "    fieldWrite: " << varPath << endl;
+        {
+            OBufStream os(iobuffer_, adiosCore::strFormat);
+            os << field;
+        }
 
         // Do the actual write
         adios_write
         (
             fileID_,
             varPath.c_str(),
-            outbuf.str().c_str()
+            iobuffer_.cdata()
         );
 
 #ifdef FOAM_ADIOS_PATCH_WRITE

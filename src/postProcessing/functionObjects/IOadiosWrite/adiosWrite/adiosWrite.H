@@ -69,7 +69,7 @@ Author
 #endif
 
 // #define FOAM_ADIOS_PATCH_WRITE
-#undef  FOAM_ADIOS_PATCH_WRITE
+// #undef  FOAM_ADIOS_PATCH_WRITE
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -213,6 +213,8 @@ protected:
         // number of processors = Pstream::nProcs()
         // process id: Pstream::procID (int procNo), 1 for rank 0
 
+        //- Buffer for reading/writing streamed content to/from adious files
+        DynamicCharList iobuffer_;
 
     // Protected Member Functions
 
@@ -256,7 +258,6 @@ protected:
             //- Field read wrapper
             bool fieldRead
             (
-                IStringStreamBuf& is,
                 adiosReader::helper& helper,
                 regionInfo&
             );
@@ -265,7 +266,6 @@ protected:
             template<class FieldType>
             bool fieldRead
             (
-                IStringStreamBuf& is,
                 adiosReader::helper& helper,
                 const fvMesh& mesh,
                 regionInfo&,
@@ -337,7 +337,7 @@ protected:
             void operator=(const adiosWrite&);
 
             //- Define ADIOS variables (before writing them)
-            void defineVars();
+            size_t defineVars();
             void deleteDefinitions();
 
         //- Pointers to cell shape models
@@ -361,9 +361,8 @@ protected:
 
             bool readClouds(adiosReader::helper&, regionInfo&);
 
-            // bool readScalarFields(adiosReader::helper&, label regionID);
-            // bool readScalarFields(IStringStreamBuf&, adiosReader::helper&, regionInfo&);
-            // NOT YET: bool readClouds(IStringStreamBuf&, adiosReader::helper&, label regionID);
+            // bool readScalarFields(adiosReader::helper&, regionInfo&);
+            // NOT YET: bool readClouds(adiosReader::helper&, label regionID);
 
 public:
 

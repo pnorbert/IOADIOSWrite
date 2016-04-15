@@ -36,6 +36,13 @@ SourceFiles
 
 #include "word.H"
 #include "instantList.H"
+#include "IOstreams.H"
+
+#include "IBufStream.H"
+#include "OBufStream.H"
+#include "OCountStream.H"
+#include "OCompactBufStream.H"
+#include "OCompactCountStream.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -66,6 +73,9 @@ protected:
         static const word fileExt;
 
 public:
+
+    static const IOstream::streamFormat strFormat = IOstream::ASCII;
+
 
     // Constructors
 

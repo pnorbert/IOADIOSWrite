@@ -70,8 +70,9 @@ void Foam::adiosReader::helper::scan(bool verbose)
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::adiosReader::helper::helper()
+Foam::adiosReader::helper::helper(const DynamicCharList& buf)
 :
+    buffer(const_cast<DynamicCharList&>(buf)),
     file(NULL),
     selection(NULL),
     maxLen(0)
@@ -237,6 +238,28 @@ size_t Foam::adiosReader::helper::sizeOf
 }
 
 
+bool Foam::adiosReader::helper::getDataSet
+(
+    const fileName& datasetName
+)
+{
+    // is.name() = Foam::name(Pstream::myProcNo()) / datasetName;
+    size_t nbytes = sizeOf(datasetName, true);
+    buffer.reserve(nbytes);
+
+    bool ok = getDataSet(datasetName, buffer.data());
+    if (ok)
+    {
+        buffer.setSize(nbytes);
+    }
+    else
+    {
+        buffer.setSize(0);
+    }
+
+    return ok;
+}
+
 
 bool Foam::adiosReader::helper::getDataSet
 (
@@ -268,24 +291,6 @@ bool Foam::adiosReader::helper::getDataSet
     }
 
     return !err;
-}
-
-
-bool Foam::adiosReader::helper::getDataSet
-(
-    const fileName& datasetName,
-    IStringStreamBuf& is
-)
-{
-    size_t nbytes = sizeOf(datasetName, true);
-
-    is.reserve(nbytes);
-
-    Pout<<"getDataSet(" << datasetName << ") " << nbytes;
-    is.print(Info);
-    Pout<< " is.good: " << is.good() << " is.eof: " << is.eof() << endl;
-
-    return getDataSet(datasetName, is.data());
 }
 
 

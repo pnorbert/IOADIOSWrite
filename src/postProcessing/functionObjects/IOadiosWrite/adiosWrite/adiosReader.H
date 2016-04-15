@@ -35,7 +35,8 @@ SourceFiles
 #define adiosReader_H
 
 #include "fileName.H"
-#include "IStringStreamBuf.H"
+#include "IBufStream.H"
+#include "DynamicCharList.H"
 
 #include "adios.h"
 #include "adios_read.h"
@@ -65,12 +66,12 @@ public:
             void operator=(const helper&);
 
     public:
-
+        DynamicCharList& buffer;
         ADIOS_FILE *file;
         ADIOS_SELECTION *selection;
         size_t maxLen;
 
-        helper();
+        helper(const DynamicCharList&);
 
         ~helper();
 
@@ -87,9 +88,13 @@ public:
         //  Values are for the current processor.
         size_t sizeOf(const fileName& datasetName, bool verbose=false);
 
-        bool getDataSet(const fileName& datasetName, void* data);
+        //- Retrieve named dataset into our buffer area
+        //  On success the buffer is resized according to the data.
+        //  On failure the buffer is resized to zero.
+        bool getDataSet(const fileName& datasetName);
 
-        bool getDataSet(const fileName& datasetName, IStringStreamBuf& is);
+        //- Retrieve named dataset directly into the memory specified
+        bool getDataSet(const fileName& datasetName, void* data);
 
         void scan(bool verbose=false);
 

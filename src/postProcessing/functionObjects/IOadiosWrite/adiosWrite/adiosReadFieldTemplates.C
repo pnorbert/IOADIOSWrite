@@ -27,18 +27,17 @@ License
 #include "adiosReader.H"
 
 #include "dictionary.H"
-#include "IStringStream.H"
-#include "IStringStreamBuf.H"
 
+#include "IBufStream.H"
 #include "IOstream.H"
 #include "Ostream.H"
+#include "OFstream.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (
-    IStringStreamBuf& is,
     adiosReader::helper& helper,
     const fvMesh& mesh,
     regionInfo& rInfo,
@@ -58,30 +57,31 @@ bool Foam::adiosWrite::fieldRead
         Pout<< "    readField via dictionary: " << field.name() << endl;
 
         // Read data from file
-        ok = helper.getDataSet(rInfo.fieldVarPath(fields[fieldI]), is);
+        ok = helper.getDataSet(rInfo.fieldVarPath(fields[fieldI]));
         if (ok)
         {
-            // Pout<<"istream content:" << endl;
-            // Pout<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
-            // is.print(Pout);
-            // Pout<< "is.good: " << is.good() << endl;
-            // Pout<< "is.eof: " << is.eof() << endl;
-            //
-            // char c;
-            // while (is.good() && !is.eof())
-            // {
-            //     is.get(c);
-            //     Pout<< char(c);
-            // }
-            // Pout<< endl << "DONE" << endl;
-
             // read fields via dictionary
-            dictionary dict(is);
+            IBufStream is(helper.buffer, adiosCore::strFormat);
+
+            // dictionary dict(is);
+
+            OFstream os("proc" + Foam::name(Pstream::myProcNo()) + "-" + field.name());
+            char c;
+            size_t count = 0;
+            while (is.good() && !is.eof())
+            {
+                is.get(c);
+                os << c;
+                ++count;
+            }
+            os << endl;
+            os << "count=" << count << endl;
+            os << "nbytes=" << helper.buffer.size() << endl;
 
             // Info<<"dictionary: " << dict << endl;
 
-            field.readField(dict, "internalField");
-            field.boundaryField().readField(field, dict.subDict("boundaryField"));
+            // field.readField(dict, "internalField");
+            // field.boundaryField().readField(field, dict.subDict("boundaryField"));
 
             // TODO: adjust for referenceLevel?
             //

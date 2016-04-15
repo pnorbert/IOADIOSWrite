@@ -91,7 +91,7 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
 }
 
 
-void Foam::adiosWrite::defineVars()
+size_t Foam::adiosWrite::defineVars()
 {
     Info<< "adiosWrite::defineVars() has been called at time "
         << obr_.time().timeName()
@@ -103,14 +103,24 @@ void Foam::adiosWrite::defineVars()
     adios_define_var(groupID_, "nregions", "", adios_integer, NULL, NULL, NULL);
     outputSize_ += 4;
 
+    size_t maxLen = 0;
+    size_t bufLen = 0;
+
     forAll(regions_, regionI)
     {
         regionInfo& rInfo = regions_[regionI];
 
         meshDefine(rInfo);
-        fieldDefine(rInfo);
+        maxLen = Foam::max(maxLen, bufLen);
+
+        bufLen = fieldDefine(rInfo);
+        maxLen = Foam::max(maxLen, bufLen);
+
         cloudDefine(rInfo);
+        maxLen = Foam::max(maxLen, bufLen);
     }
+
+    return maxLen;
 }
 
 
@@ -347,6 +357,8 @@ void Foam::adiosWrite::write()
         << "time " << obr_.time().timeName()
         << " time index " << obr_.time().timeIndex() << endl;
 
+    size_t maxLen = 0;
+
     // Check if we are going to write
     //if ( timeSteps_ == 0 )
     if (timeSteps_ == nextWrite_)
@@ -366,7 +378,7 @@ void Foam::adiosWrite::write()
             // Note: updating all of them for simplicity
             deleteDefinitions();
         }
-        defineVars();
+        maxLen = defineVars();
 #else
 
         if (timeSteps_ == 0)
@@ -390,7 +402,7 @@ void Foam::adiosWrite::write()
 
             // ADIOS requires to define all variables before writing anything
             Info<< "Define variables in ADIOS" << endl;
-            defineVars();
+            maxLen = defineVars();
         }
         else if (primaryMesh_.changing())
         {
@@ -398,13 +410,15 @@ void Foam::adiosWrite::write()
             Info<< "Redefine all variables in ADIOS because primary mesh has "
                 << "changed at time " << obr_.time().timeName() << endl;
             deleteDefinitions();
-            defineVars();
+            maxLen = defineVars();
         }
 #endif
 
         // Create/reopen ADIOS output file, and tell ADIOS how many bytes we
         // are going to write
         open();
+
+        iobuffer_.reserve(maxLen);
 
         int n = regions_.size();
         adios_write(fileID_, "nregions", &n);
