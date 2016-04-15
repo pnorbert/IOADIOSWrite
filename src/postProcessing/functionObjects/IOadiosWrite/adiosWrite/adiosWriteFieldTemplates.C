@@ -47,22 +47,25 @@ size_t Foam::adiosWrite::fieldDefine
 
     forAll(fields, fieldI)
     {
+        // Lookup field
+        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
+
+        fileName varPath = rInfo.fieldVarPath(fields[fieldI]);
+
+#ifdef FOAM_ADIOS_PATCH_WRITE
         fileName datasetName
         (
             "region" + Foam::name(rInfo.index_)
           / "fields" / fields[fieldI]
         );
-
-        // Lookup field
-        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
-
+#endif
         outbuf.rewind();
         outbuf << field;
 
         size_t bufLen = outbuf.str().size();
         maxLen = Foam::max(maxLen, bufLen);
 
-        Pout<< "    fieldDefine: " << datasetName
+        Pout<< "    fieldDefine: " << varPath
             << "  (size " << field.size() << ")"
             << "  stream-size " << bufLen << endl
             << "  stream-content " << outbuf.str() << endl
@@ -71,17 +74,29 @@ size_t Foam::adiosWrite::fieldDefine
         adios_define_var
         (
             groupID_,
-            (
-                "region" + Foam::name(rInfo.index_)
-              / "field" / fields[fieldI] / "stream"
-            ).c_str(),                          // name
-            "",                                 // path
+            varPath.c_str(),                    // name
+            "",
             adios_unsigned_byte,                // data-type
             Foam::name(bufLen).c_str(),         // dimensions
             Foam::name(bufLen).c_str(),         // global dimensions
             "0"                                 // local offsets
         );
         outputSize_ += bufLen;
+
+        adios_define_attribute
+        (
+            groupID_,
+            "class",
+            varPath.c_str(),
+            adios_string,
+            field.type().c_str(),  // volScalarField etc.
+            NULL
+        );
+
+        // could also write field.dimensions() as an attribute
+        // if needed to save parsing
+
+#ifdef FOAM_ADIOS_PATCH_WRITE
 
         // Define a 1D array with field.size as global size, and local (this
         // process') size and with offset 0
@@ -165,6 +180,8 @@ size_t Foam::adiosWrite::fieldDefine
             //     pf1[faceI] = ...
             // }
         }
+
+#endif /* FOAM_ADIOS_PATCH_WRITE */
     }
 
     Pout<< "max stream-size: " << maxLen << endl;
@@ -187,42 +204,42 @@ void Foam::adiosWrite::fieldWrite
 
     forAll(fields, fieldI)
     {
+        // Lookup field
+        const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
+
+        fileName varPath = rInfo.fieldVarPath(fields[fieldI]);
+
+#ifdef FOAM_ADIOS_PATCH_WRITE
         // Dataset for this process
         fileName datasetName
         (
             "region" + Foam::name(rInfo.index_)
           / "fields" / fields[fieldI]
         );
-
-        // Lookup field
-        const FieldType& constField =
-            mesh.lookupObject<FieldType>(fields[fieldI]);
-
-        Info<< "    fieldWrite: " << fields[fieldI] << endl;
-
+#endif
         outbuf.rewind();
-        outbuf << constField;
+        outbuf << field;
+
+        Info<< "    fieldWrite: " << varPath << endl;
 
         // Do the actual write
         adios_write
         (
             fileID_,
-            (
-                "region" + Foam::name(rInfo.index_)
-              / "field" / fields[fieldI] / "stream"
-            ).c_str(),
+            varPath.c_str(),
             outbuf.str().c_str()
         );
 
-        // ADIOS requires non-const access to the field for writing (?)
-        FieldType& field = const_cast<FieldType&>(constField);
+#ifdef FOAM_ADIOS_PATCH_WRITE
 
+        // ADIOS requires non-const access to the field for writing (?)
+        FieldType& fld = const_cast<FieldType&>(field);
 
         // Do the actual write
-        adios_write(fileID_, datasetName.c_str(), field.data());
-        //adios_write (fileID_, datasetName, reinterpret_cast<void *>(field.internalField().data());
+        adios_write(fileID_, datasetName.c_str(), fld.data());
+        //adios_write (fileID_, datasetName, reinterpret_cast<void *>(fld.internalField().data());
 
-        typename FieldType::GeometricBoundaryField& bf = field.boundaryField();
+        typename FieldType::GeometricBoundaryField& bf = fld.boundaryField();
 
         // Do the same for all patches
         forAll(bf, patchI)
@@ -245,6 +262,9 @@ void Foam::adiosWrite::fieldWrite
             free(buf);
 #endif
         }
+
+#endif /* FOAM_ADIOS_PATCH_WRITE */
+
     }
 }
 

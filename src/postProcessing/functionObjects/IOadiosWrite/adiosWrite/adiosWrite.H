@@ -68,6 +68,8 @@ Author
 #   error "Neither WM_DP nor WM_SP is defined when compiling adiosWrite.H"
 #endif
 
+// #define FOAM_ADIOS_PATCH_WRITE
+#undef  FOAM_ADIOS_PATCH_WRITE
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -128,9 +130,11 @@ protected:
             //- Which attributes to write for particle data
             wordReList cloudAttribs_;
 
-            //- Categorized scalar/vector/tensor fields
+            //- Categorized scalar/vector/tensor vol fields
             fieldGroup<scalar> scalarFields_;
             fieldGroup<vector> vectorFields_;
+
+            //- Categorized scalar/vector/tensor surf fields
             fieldGroup<scalar> surfaceScalarFields_;
 
             //- Array containing number of cells per process (often used list)
@@ -146,6 +150,24 @@ protected:
 
             //- Total number of particles (sum of nParticles_ list)
             label nTotalParticles_;
+
+            //- The standard path name for a field
+            fileName fieldVarPath(const std::string& var) const
+            {
+                return fileName
+                (
+                    "region" + Foam::name(index_) / "field" / var
+                );
+            }
+
+            //- The standard path name for a mesh variable
+            fileName meshVarPath(const std::string& var) const
+            {
+                return fileName
+                (
+                    "mesh" + Foam::name(index_) / var
+                );
+            }
         };
 
 
@@ -236,7 +258,7 @@ protected:
             (
                 IStringStreamBuf& is,
                 adiosReader::helper& helper,
-                const label regionId
+                regionInfo&
             );
 
             //- Read data for a given type
@@ -246,8 +268,8 @@ protected:
                 IStringStreamBuf& is,
                 adiosReader::helper& helper,
                 const fvMesh& mesh,
-                const fieldGroup<typename FieldType::value_type>& fields,
-                const label regionId
+                regionInfo&,
+                const fieldGroup<typename FieldType::value_type>& fields
             );
 
 
@@ -336,10 +358,11 @@ protected:
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
             bool readData();
-            bool readScalarFields(adiosReader::helper&, label regionID);
-            bool readClouds(adiosReader::helper&, label regionID);
 
-            bool readScalarFields(IStringStreamBuf&, adiosReader::helper&, label regionID);
+            bool readClouds(adiosReader::helper&, regionInfo&);
+
+            // bool readScalarFields(adiosReader::helper&, label regionID);
+            // bool readScalarFields(IStringStreamBuf&, adiosReader::helper&, regionInfo&);
             // NOT YET: bool readClouds(IStringStreamBuf&, adiosReader::helper&, label regionID);
 
 public:

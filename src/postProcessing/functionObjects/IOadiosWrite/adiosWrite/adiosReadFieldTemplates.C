@@ -41,8 +41,8 @@ bool Foam::adiosWrite::fieldRead
     IStringStreamBuf& is,
     adiosReader::helper& helper,
     const fvMesh& mesh,
-    const fieldGroup<typename FieldType::value_type>& fields,
-    const label regionId
+    regionInfo& rInfo,
+    const fieldGroup<typename FieldType::value_type>& fields
 )
 {
     bool ok = true;
@@ -57,38 +57,31 @@ bool Foam::adiosWrite::fieldRead
 
         Pout<< "    readField via dictionary: " << field.name() << endl;
 
-        fileName datasetName
-        (
-            "region" + Foam::name(regionId)
-          / "field" / fields[fieldI] / "stream"
-        );
-
-
         // Read data from file
-        ok = helper.getDataSet(datasetName, is);
+        ok = helper.getDataSet(rInfo.fieldVarPath(fields[fieldI]), is);
         if (ok)
         {
-            Pout<<"istream content:" << endl;
-            Pout<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
-            is.print(Pout);
-            Pout<< "is.good: " << is.good() << endl;
-            Pout<< "is.eof: " << is.eof() << endl;
-
-            char c;
-            while (is.good() && !is.eof())
-            {
-                is.get(c);
-                Pout<< char(c);
-            }
-            Pout<< endl << "DONE" << endl;
+            // Pout<<"istream content:" << endl;
+            // Pout<<"has " << is.stdStream().rdbuf()->in_avail() << " chars" << endl;
+            // is.print(Pout);
+            // Pout<< "is.good: " << is.good() << endl;
+            // Pout<< "is.eof: " << is.eof() << endl;
+            //
+            // char c;
+            // while (is.good() && !is.eof())
+            // {
+            //     is.get(c);
+            //     Pout<< char(c);
+            // }
+            // Pout<< endl << "DONE" << endl;
 
             // read fields via dictionary
-            // dictionary dict(is);
+            dictionary dict(is);
 
             // Info<<"dictionary: " << dict << endl;
 
-            // field.readField(dict, "internalField");
-            // field.boundaryField().readField(field, dict.subDict("boundaryField"));
+            field.readField(dict, "internalField");
+            field.boundaryField().readField(field, dict.subDict("boundaryField"));
 
             // TODO: adjust for referenceLevel?
             //
