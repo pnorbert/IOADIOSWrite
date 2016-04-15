@@ -40,7 +40,7 @@ Notes
 #define IStringStreamBuf_H
 
 #include "IStringStream.H"
-#include "DynamicList.H"
+#include "DynamicCharList.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -54,11 +54,11 @@ namespace Foam
 class IStringStreamBuf
 :
     public IStringStream,
-    private DynamicList<char,1,1,1>
+    private DynamicCharList
 {
 private:
 
-    typedef DynamicList<char,1,1,1> StorageList;
+    typedef DynamicCharList StorageList;
 
     //- Attach storage buffer to the stream and allow nbytes of data
     //  When nbytes=0, allow usage of the entire storage buffer
