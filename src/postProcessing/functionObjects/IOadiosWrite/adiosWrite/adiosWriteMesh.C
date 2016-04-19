@@ -266,6 +266,8 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
     {
         OutputBufStreamer os(iobuffer_, adiosCore::strFormat);
         os << mesh.boundaryMesh();
+        // DEBUG iobuffer_[os.size()] = 0; // c-string
+        // DEBUG Info<<"boundary: " << iobuffer_.cdata() << endl;
 
         writeVariable(varPath/"boundary", iobuffer_.cdata());
     }
@@ -273,67 +275,25 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
     Info<< endl;
 }
 
-// face-io (compact form)
-//
-// sizes:
-//    start-list: nFace+1
-//    input-elem: ???
-//
-//         // Convert to compact format
-//         labelList start(L.size()+1);
-//
-//         start[0] = 0;
-//         for (label i = 1; i < start.size(); i++)
-//         {
-//             label prev = start[i-1];
-//             start[i] = prev+L[i-1].size();
-//
-//             if (start[i] < prev)
-//             {
-//                 FatalIOErrorInFunction(os)
-//                     << "Overall number of elements " << start[i]
-//                     << " of CompactIOList of size "
-//                     << L.size() << " overflows the representation of a label"
-//                     << endl << "Please recompile with a larger representation"
-//                     << " for label" << exit(FatalIOError);
-//             }
-//         }
-//
-//         List<BaseType> elems(start[start.size()-1]);
-//
-//         label elemI = 0;
-//         forAll(L, i)
-//         {
-//             const T& subList = L[i];
-//
-//             forAll(subList, j)
-//             {
-//                 elems[elemI++] = subList[j];
-//             }
-//         }
-//         os << start << elems;
-//     }
 
-
-
-size_t Foam::adiosWrite::meshDefinePoints(const fvMesh& m, regionInfo& r)
+size_t Foam::adiosWrite::meshDefinePoints(const fvMesh& mesh, regionInfo& r)
 {
     Info<< "  meshDefinePoints" << endl;
 
-    const pointField& points = m.points();
+    const pointField& points = mesh.points();
 
-    // Find out how many points each process has
-///     List<label> nPoints(Pstream::nProcs());
-///     nPoints[Pstream::myProcNo()] = points.size();
-///     Pstream::gatherList(nPoints);
-///     Pstream::scatterList(nPoints);
+    //// Find out how many points each process has
+    // List<label> nPoints(Pstream::nProcs());
+    // nPoints[Pstream::myProcNo()] = points.size();
+    // Pstream::gatherList(nPoints);
+    // Pstream::scatterList(nPoints);
 
     fileName varPath("mesh" + Foam::name(r.index_));
     Info<< "varpath = " << varPath << endl;
 
     // Define a 1D array to store number of points on each processor
-    const string global = Foam::name(Pstream::nProcs());      // form a global 1D array of this info
-    const string offset = Foam::name(Pstream::myProcNo());    // offsets of this process in the 1D array
+    const word global = Foam::name(Pstream::nProcs());      // form a global 1D array of this info
+    const word offset = Foam::name(Pstream::myProcNo());    // offsets of this process in the 1D array
     adios_define_var
     (
         groupID_,
@@ -360,7 +320,7 @@ size_t Foam::adiosWrite::meshDefinePoints(const fvMesh& m, regionInfo& r)
 }
 
 
-size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
+size_t Foam::adiosWrite::meshDefineCells(const fvMesh& mesh, regionInfo& r)
 {
     Info<< "  meshDefineCells" << endl;
 
@@ -373,8 +333,8 @@ size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
     shapeLookupIndex.insert(wedgeModel->index(), 5);
     shapeLookupIndex.insert(unknownModel->index(), 0);
 
-    const cellList& cells  = m.cells();
-    const cellShapeList& shapes = m.cellShapes();
+    const cellList& cells  = mesh.cells();
+    const cellShapeList& shapes = mesh.cellShapes();
 
 
     // Find dataset length for this process
@@ -438,7 +398,7 @@ size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
     char offstr[16];
 
     // Define a 1D array to store number of cells of each processor
-    //sprintf (datasetName, "MESH/%s/nCells", m.time().timeName().c_str());
+    //sprintf (datasetName, "MESH/%s/nCells", mesh.time().timeName().c_str());
     sprintf (datasetName, "mesh%d/ncells", r.index_);
     sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
     sprintf (offstr,  "%d", Pstream::myProcNo());      // offsets of this process in the 1D array
@@ -450,7 +410,7 @@ size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
         (
             datasetName,
             "MESH/%s/processor%i/CELLS",
-            m.time().timeName().c_str(),
+            mesh.time().timeName().c_str(),
             Pstream::myProcNo()
         );
     */
@@ -463,11 +423,11 @@ size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
 }
 
 
-size_t Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
+size_t Foam::adiosWrite::meshDefineBoundaries(const fvMesh& mesh, regionInfo& r)
 {
     /*
     Info<< "  meshDefineBoundaries" << endl;
-    const polyPatchList& patches = m.boundaryMesh();
+    const polyPatchList& patches = mesh.boundaryMesh();
 
     Info<< "----------------" << nl
         << "Patches" << nl
@@ -478,8 +438,8 @@ size_t Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
         const polyPatch& p = patches[patchI];
         const polyBoundaryMesh& b = p.boundaryMesh();
         const polyMesh& m = b.mesh();
-        const cellList& cells  = m.cells();
-        const cellShapeList& shapes = m.cellShapes();
+        const cellList& cells  = mesh.cells();
+        const cellShapeList& shapes = mesh.cellShapes();
 
         Info<< "  " << "patch " << patchI
             << " (start: " << p.start()
@@ -510,11 +470,11 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, const regionInfo& r)
         pointList[ptI][2] = points[ptI].z();
     }
 
-    // Find out how many points each process has
-    List<label> nPoints(Pstream::nProcs());
-    nPoints[Pstream::myProcNo()] = points.size();
-    Pstream::gatherList(nPoints);
-    Pstream::scatterList(nPoints);
+    // // Find out how many points each process has
+    // List<label> nPoints(Pstream::nProcs());
+    // nPoints[Pstream::myProcNo()] = points.size();
+    // Pstream::gatherList(nPoints);
+    // Pstream::scatterList(nPoints);
 
     int n = points.size();
     writeVariable(varPath/"npoints", &n);

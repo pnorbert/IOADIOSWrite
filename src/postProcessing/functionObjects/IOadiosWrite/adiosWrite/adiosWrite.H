@@ -57,6 +57,7 @@ Author
 #include <stdio.h> // sprintf
 
 #define FOAM_ADIOS_PATCH_WRITE
+// #define FOAM_ADIOS_PATCH_WRITE
 // #undef  FOAM_ADIOS_PATCH_WRITE
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
