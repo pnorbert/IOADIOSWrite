@@ -24,11 +24,13 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosCore.H"
+#include "adios_types.h"
 
 #include "fileNameList.H"
 #include "IStringStream.H"
 #include "token.H"
 #include "OSspecific.H"
+#include "scalar.H"
 
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
@@ -38,6 +40,9 @@ Foam::adiosCore::dataDirectory("adiosData");
 
 const Foam::word
 Foam::adiosCore::fileExt("bp");
+
+const char * const
+Foam::adiosCore::foamAttribute = "/__openfoam__";
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //

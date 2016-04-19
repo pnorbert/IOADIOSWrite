@@ -33,7 +33,7 @@ void Foam::adiosWrite::open()
 {
     Info<< "adiosWrite::open:" << endl;
 
-    // Create output directory if nonexisting in the beginning
+    // Create output directory if initially non-existent
     static bool checkdir = true;
     if (checkdir && !isDir(dataDirectory))
     {
@@ -69,7 +69,7 @@ void Foam::adiosWrite::open()
     */
 
     // Print info to terminal
-    Info<< "  adiosWrite: Chosen filename " << dataFile << endl << endl;
+    Info<< "  adiosWrite: Chosen filename " << dataFile << nl << endl;
 
     int err = adios_open
     (
@@ -92,6 +92,7 @@ void Foam::adiosWrite::open()
             << "File " << name()
             << " could not be created: " << nl
             << adios_get_last_errmsg();
+
         fileID_ = 0;
     }
 }
@@ -100,15 +101,172 @@ void Foam::adiosWrite::open()
 void Foam::adiosWrite::close()
 {
     MPI_Barrier(MPI_COMM_WORLD);
-    Info<< "adiosWrite::close" << endl << endl;
+    Info<< "adiosWrite::close" << nl << endl;
 
     // Close the file
     if (fileID_)
     {
         adios_close(fileID_);
+        fileID_ = 0;
     }
 }
 
+
+// * * * * * * * * * * * *  Protected Member Functions * * * * * * * * * * * //
+
+
+size_t Foam::adiosWrite::defineVariable
+(
+    const char* name,
+    enum ADIOS_DATATYPES type,
+    size_t count
+)
+{
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        "",                             // path (deprecated)
+        type,                           // data-type
+        Foam::name(count).c_str(),      // local dimensions
+        "",                             // global dimensions
+        ""                              // local offsets
+    );
+
+    int sz = count * adios_type_size(type, NULL);
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineVariable
+(
+    const fileName& name,
+    enum ADIOS_DATATYPES type,
+    size_t count
+)
+{
+    return defineVariable(name.c_str(), type, count);
+}
+
+
+size_t Foam::adiosWrite::defineVectorVariable
+(
+    const char* name,
+    enum ADIOS_DATATYPES type,
+    size_t count
+)
+{
+    string localDims = Foam::name(count) + ",3";
+
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        "",                             // path (deprecated)
+        type,                           // data-type
+        localDims.c_str(),              // local dimensions
+        "",                             // global dimensions
+        ""                              // local offsets
+    );
+
+    int sz = 3 * count * adios_type_size(type, NULL);
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineVectorVariable
+(
+    const fileName& name,
+    enum ADIOS_DATATYPES type,
+    size_t count
+)
+{
+    return defineVectorVariable(name.c_str(), type, count);
+}
+
+
+void Foam::adiosWrite::defineAttribute
+(
+    const char* attrName,
+    const char* varName,
+    const std::string& value
+)
+{
+    adios_define_attribute
+    (
+        groupID_,
+        attrName,
+        varName,
+        adios_string,
+        value.c_str(),
+        NULL
+    );
+}
+
+
+void Foam::adiosWrite::defineAttribute
+(
+    const char* attrName,
+    const fileName& varName,
+    const std::string& value
+)
+{
+    defineAttribute(attrName, varName.c_str(), value);
+}
+
+
+void Foam::adiosWrite::defineAttribute
+(
+    const char* attrName,
+    const char* varName,
+    const bool value
+)
+{
+    adios_define_attribute
+    (
+        groupID_,
+        attrName,
+        varName,
+        adios_byte, // actually a bool
+        (value ? "1" : "0"),
+        NULL
+    );
+}
+
+
+void Foam::adiosWrite::defineAttribute
+(
+    const char* attrName,
+    const fileName& varName,
+    const bool value
+)
+{
+    defineAttribute(attrName, varName.c_str(), value);
+}
+
+
+void Foam::adiosWrite::writeVariable
+(
+    const char* name,
+    const void* value
+)
+{
+    adios_write(fileID_, name, value);
+}
+
+
+void Foam::adiosWrite::writeVariable
+(
+    const fileName& name,
+    const void* value
+)
+{
+    writeVariable(name.c_str(), value);
+}
 
 
 // ************************************************************************* //

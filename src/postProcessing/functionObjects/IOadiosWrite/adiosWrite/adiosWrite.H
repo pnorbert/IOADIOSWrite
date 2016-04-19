@@ -56,25 +56,24 @@ Author
 #include "adios_read.h"
 #include <stdio.h> // sprintf
 
-// If OpenFOAM is compiled with single precision, the IO will be single
-// precision.
-#if defined(WM_DP)
-#   define ADIOS_SCALAR adios_double
-    typedef double ioScalar;
-#elif defined(WRITE_SP)
-#   define ADIOS_SCALAR adios_float
-    typedef float ioScalar;
-#else
-#   error "Neither WM_DP nor WM_SP is defined when compiling adiosWrite.H"
-#endif
-
-// #define FOAM_ADIOS_PATCH_WRITE
+#define FOAM_ADIOS_PATCH_WRITE
 // #undef  FOAM_ADIOS_PATCH_WRITE
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
+// If OpenFOAM is compiled with single precision, the IO will be single
+// precision.
+#if defined(WM_SP) || defined(WRITE_SP)
+# define ADIOS_SCALAR   adios_real
+typedef float ioScalar;
+#elif defined(WM_DP)
+# define ADIOS_SCALAR   adios_double
+typedef double ioScalar;
+#else
+# error "Neither WM_DP nor WM_SP defined when compiling adiosCore"
+#endif
 
 // Forward declaration of classes
 class objectRegistry;
@@ -227,6 +226,91 @@ protected:
             void close();
 
 
+        // General adios handling
+
+            //- Define a variable with count elements
+            //  Increment the output size and return the variable size
+            size_t defineVariable
+            (
+                const char* name,
+                enum ADIOS_DATATYPES type,
+                size_t count = 1
+            );
+
+            //- Define a variable with count elements
+            //  Increment the output size and return the variable size
+            size_t defineVariable
+            (
+                const fileName& name,
+                enum ADIOS_DATATYPES type,
+                size_t count = 1
+            );
+
+            //- Define a vector (3 items) variable with count elements
+            //  Increment the output size and return the variable size
+            size_t defineVectorVariable
+            (
+                const char* name,
+                enum ADIOS_DATATYPES type,
+                size_t count
+            );
+
+            //- Define a vector (3 items) variable with count elements
+            //  Increment the output size and return the variable size
+            size_t defineVectorVariable
+            (
+                const fileName& name,
+                enum ADIOS_DATATYPES type,
+                size_t count
+            );
+
+            //- Define a string attribute
+            void defineAttribute
+            (
+                const char* attrName,
+                const char* varName,
+                const std::string& value
+            );
+
+            //- Define a string attribute
+            void defineAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const std::string& value
+            );
+
+            //- Define a bool attribute (save as byte)
+            void defineAttribute
+            (
+                const char* attrName,
+                const char* varName,
+                const bool value
+            );
+
+            //- Define a bool attribute (save as byte)
+            void defineAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const bool value
+            );
+
+            //- Write a variable
+            void writeVariable
+            (
+                const char* name,
+                const void* value
+            );
+
+            //- Write a variable
+            void writeVariable
+            (
+                const fileName& name,
+                const void* value
+            );
+
+
         // Functions for handling field data
 
             //- Field define wrapper
@@ -297,16 +381,16 @@ protected:
         // Functions for handling mesh
 
             //- Mesh define wrapper
-            void meshDefine(regionInfo&);
+            size_t meshDefine(regionInfo&);
 
             //- Define points
-            void meshDefinePoints(const fvMesh&, regionInfo&);
+            size_t meshDefinePoints(const fvMesh&, regionInfo&);
 
             //- Define cells
-            void meshDefineCells(const fvMesh&, regionInfo&);
+            size_t meshDefineCells(const fvMesh&, regionInfo&);
 
             //- Define Boundary meshes
-            void meshDefineBoundaries(const fvMesh&, regionInfo&);
+            size_t meshDefineBoundaries(const fvMesh&, regionInfo&);
 
             //- Mesh write wrapper
             void meshWrite(const regionInfo&);
@@ -337,7 +421,9 @@ protected:
             void operator=(const adiosWrite&);
 
             //- Define ADIOS variables (before writing them)
-            size_t defineVars();
+            //  Optionally define mesh information too
+            size_t defineVars(const bool updateMesh);
+
             void deleteDefinitions();
 
         //- Pointers to cell shape models

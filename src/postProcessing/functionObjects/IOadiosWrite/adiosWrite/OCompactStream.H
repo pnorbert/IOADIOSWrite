@@ -79,6 +79,13 @@ public:
 
         // Write functions
 
+            //- Write character
+            virtual Ostream& write(const char);
+
+            // all other writes as per OSstream
+            using OSstream::write;
+
+
             //- Add indentation characters
             virtual void indent();
 

@@ -1,9 +1,10 @@
- /*---------------------------------------------------------------------------*\
+/*---------------------------------------------------------------------------*\
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
     \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
      \\/     M anipulation  |               2015 Norbert Podhorszki
+                            |               2016 OpenCFD Ltd
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -49,35 +50,121 @@ const Foam::cellModel* Foam::adiosWrite::wedgeModel =
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void Foam::adiosWrite::meshDefine(regionInfo& r)
+size_t Foam::adiosWrite::meshDefine(regionInfo& r)
 {
-    Info<< "adiosWrite::meshDefine: region "
-        << r.index_ << "=" << r.name_ << endl;
+    OCompactCountStream os(adiosCore::strFormat);
+    size_t maxLen = 0;
 
-    const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
+    Info<< "adiosWrite::meshDefine: region"
+        << r.index_ << "=" << r.name_ << " at time " << time_.timeName() << endl;
+
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+
 
     // Find over all (global) number of cells per process
-    r.nCells_[Pstream::myProcNo()] = m.cells().size();
+    r.nCells_[Pstream::myProcNo()] = mesh.cells().size();
     Pstream::gatherList(r.nCells_);
     Pstream::scatterList(r.nCells_);
 
-    // Define time and time index as single scalar (written from rank 0)
-    char datasetName[80];
+    fileName varPath = "mesh" + Foam::name(r.index_);
+    Info<< "varpath = " << varPath << endl;
 
-    sprintf(datasetName, "mesh%d/time", r.index_);
-    adios_define_var(groupID_, datasetName, "", adios_integer, NULL, NULL, NULL);
+    defineVariable(varPath/"time",      adios_integer);
+    defineVariable(varPath/"timeidx",   adios_integer);
 
-    sprintf(datasetName, "mesh%d/timeidx", r.index_);
-    adios_define_var(groupID_, datasetName,  "", adios_integer, NULL, NULL, NULL);
-
-    outputSize_ += 2*4; // size of adios_integer
-
+    varPath = "region" + Foam::name(r.index_) / "polyMesh";
     // Define mesh
-    meshDefinePoints(m, r);
-    meshDefineCells(m, r);
+
+    // polyMesh/points
+    meshDefinePoints(mesh, r);
+
+    // polyMesh/faces - save in compact form
+    {
+        const faceList& faces = mesh.faces();
+        size_t bufLen = 0;
+
+        // indices = nFaces+1
+        label count = faces.size()+1;
+
+        bufLen = defineVariable
+        (
+            varPath/"faces"/"indices",
+            adios_integer,
+            count
+        );
+
+        // will need transcription for output
+        maxLen = Foam::max(maxLen, bufLen);
+
+        // count size for compact format
+        count = 0;
+        forAll(faces, faceI)
+        {
+            count += faces[faceI].size();
+        }
+
+        bufLen = defineVariable
+        (
+            varPath/"faces"/"content",
+            adios_integer,
+            count
+        );
+        maxLen = Foam::max(maxLen, bufLen);
+    }
+
+    // polyMesh/owner
+    defineVariable
+    (
+        varPath/"owner",
+        adios_integer,
+        mesh.faceOwner().size()
+    );
+
+    // polyMesh/neighbour
+    defineVariable
+    (
+        varPath/"neighbour",
+        adios_integer,
+        mesh.faceNeighbour().size()
+    );
+
+    // polyMesh/boundary - byte-stream
+    {
+        os.rewind();
+        os << mesh.boundaryMesh();
+
+        size_t bufLen = os.size();
+        maxLen = Foam::max(maxLen, bufLen);
+
+        defineVariable(varPath/"boundary", adios_unsigned_byte, bufLen);
+    }
+
+    meshDefineCells(mesh, r);
+
     //meshDefineBoundaries();
 
+//
+// constant/polyMesh/pointProcAddressing
+// constant/polyMesh/boundaryProcAddressing
+// constant/polyMesh/cellProcAddressing
+// constant/polyMesh/faceProcAddressing
+
+#if 1
+    Info<< "Writing polyMesh" << endl;
+    const_cast<fvMesh&>(mesh).setInstance(mesh.time().timeName());
+    mesh.polyMesh::write();
+#endif
+    // cells -> compactIOList
+
+// faceCompactIOList faces_;
+// typedef CompactIOList<face, label> faceCompactIOList;
+//
+// list of labels (starting points)
+// list of elements of the basetype (eg, labels)
+
     Info<< endl;
+
+    return maxLen;
 }
 
 
@@ -85,84 +172,195 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
 {
     Info<< "adiosWrite::meshWrite:" << endl;
 
-    const fvMesh& m = time_.lookupObject<fvMesh>(r.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
-    char datasetName[80];
+    fileName varPath = "mesh" + Foam::name(r.index_);
+    Info<< "varpath = " << varPath << endl;
 
-    sprintf(datasetName, "mesh%d/time", r.index_);
-    int t = m.time().timeOutputValue();
-    adios_write(fileID_, datasetName, &t);
+    int t = mesh.time().timeOutputValue();
+    writeVariable(varPath/"time", &t);
 
-    sprintf(datasetName, "mesh%d/timeidx", r.index_);
-    t = m.time().timeIndex();
-    adios_write(fileID_, datasetName, &t);
+    t = mesh.time().timeIndex();
+    writeVariable(varPath/"timeidx", &t);
 
     // Write mesh
-    meshWritePoints(m, r);
-    meshWriteCells(m, r);
+    meshWritePoints(mesh, r);
+    meshWriteCells(mesh, r);
+
+    varPath = "region" + Foam::name(r.index_) / "polyMesh";
+
+    // polyMesh/faces - save in compact form
+#if 1
+    {
+        const faceList& faces = mesh.faces();
+        const label nFaces = faces.size();
+
+        // this is not particularly elegant, but should be stable
+        List<label> start(nFaces+1);
+
+        // // use iobuffer_ to avoid reallocations
+        // UList<label> start
+        // (
+        //     reinterpret_cast<label*>(iobuffer_.data()),
+        //     iobuffer_.capacity() / sizeof(label)
+        // );
+
+        // use iobuffer_ to avoid reallocations
+        Pout<< "indices " << start.size() << endl;
+
+        // calculate start as per CompactIOList.C:
+        start[0] = 0;
+        forAll(faces, faceI)
+        {
+            label prev = start[faceI];
+            start[faceI+1] = prev + faces[faceI].size();
+
+            if (start[faceI+1] < prev)
+            {
+                FatalErrorInFunction
+                    << "Overall number of elements " << start[faceI+1]
+                    << " of CompactIOList of size "
+                    << nFaces << " overflows the representation of a label"
+                    << endl << "Please recompile with a larger representation"
+                    << " for label" << exit(FatalIOError);
+            }
+        }
+
+        writeVariable(varPath/"faces"/"indices", start.cdata());
+
+        // this is not particularly elegant, but should be stable
+        List<label> elems(start[start.size()-1]);
+
+        // use iobuffer_ to avoid reallocations
+        // UList<label> elems
+        // (
+        //     reinterpret_cast<label*>(iobuffer_.data()),
+        //     iobuffer_.capacity() / sizeof(label)
+        // );
+
+        Pout<< "size: " << elems.size() << endl;
+
+        // calculate content as per CompactIOList.C:
+        label elemI = 0;
+        forAll(faces, faceI)
+        {
+            const face& f = faces[faceI];
+
+            forAll(f, i)
+            {
+                elems[elemI++] = f[i];
+            }
+        }
+
+        writeVariable(varPath/"faces"/"content", elems.cdata());
+    }
+#endif
+
+    // polyMesh/owner
+    writeVariable(varPath/"owner", mesh.faceOwner().cdata());
+
+    // polyMesh/neighbour
+    writeVariable(varPath/"neighbour", mesh.faceNeighbour().cdata());
+
+    // polyMesh/boundary
+    {
+        OCompactBufStream os(iobuffer_, adiosCore::strFormat);
+        os << mesh.boundaryMesh();
+
+        writeVariable(varPath/"boundary", iobuffer_.cdata());
+    }
 
     Info<< endl;
 }
 
+// face-io (compact form)
+//
+// sizes:
+//    start-list: nFace+1
+//    input-elem: ???
+//
+//         // Convert to compact format
+//         labelList start(L.size()+1);
+//
+//         start[0] = 0;
+//         for (label i = 1; i < start.size(); i++)
+//         {
+//             label prev = start[i-1];
+//             start[i] = prev+L[i-1].size();
+//
+//             if (start[i] < prev)
+//             {
+//                 FatalIOErrorInFunction(os)
+//                     << "Overall number of elements " << start[i]
+//                     << " of CompactIOList of size "
+//                     << L.size() << " overflows the representation of a label"
+//                     << endl << "Please recompile with a larger representation"
+//                     << " for label" << exit(FatalIOError);
+//             }
+//         }
+//
+//         List<BaseType> elems(start[start.size()-1]);
+//
+//         label elemI = 0;
+//         forAll(L, i)
+//         {
+//             const T& subList = L[i];
+//
+//             forAll(subList, j)
+//             {
+//                 elems[elemI++] = subList[j];
+//             }
+//         }
+//         os << start << elems;
+//     }
 
-void Foam::adiosWrite::meshDefinePoints(const fvMesh& m, regionInfo& r)
+
+
+size_t Foam::adiosWrite::meshDefinePoints(const fvMesh& m, regionInfo& r)
 {
     Info<< "  meshDefinePoints" << endl;
 
     const pointField& points = m.points();
 
     // Find out how many points each process has
-    List<label> nPoints(Pstream::nProcs());
-    nPoints[Pstream::myProcNo()] = points.size();
-    Pstream::gatherList(nPoints);
-    Pstream::scatterList(nPoints);
+///     List<label> nPoints(Pstream::nProcs());
+///     nPoints[Pstream::myProcNo()] = points.size();
+///     Pstream::gatherList(nPoints);
+///     Pstream::scatterList(nPoints);
 
-    /*
-    // Sum total number of particles on all processes
-    label nTotalPoints = sum(nPoints);
-
-    int myoffset = 0;
-    for (label proc=0; proc < Pstream::myProcNo(); proc++)
-    {
-        myoffset += nPoints[proc];
-    }
-    */
-
-    // Create the dataset for points
-    char datasetName[80];
-    char ldimstr[16];
-    char gdimstr[16];
-    char offstr[16];
+    fileName varPath("mesh" + Foam::name(r.index_));
+    Info<< "varpath = " << varPath << endl;
 
     // Define a 1D array to store number of points on each processor
-    sprintf(datasetName, "mesh%d/npoints", r.index_);
-    sprintf(gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
-    sprintf(offstr,  "%d", Pstream::myProcNo());    // offsets of this process in the 1D array
-    adios_define_var(groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+    const string global = Foam::name(Pstream::nProcs());      // form a global 1D array of this info
+    const string offset = Foam::name(Pstream::myProcNo());    // offsets of this process in the 1D array
+    adios_define_var
+    (
+        groupID_,
+        (varPath/"npoints").c_str(),
+        "",
+        adios_integer,
+        "1",
+        global.c_str(),
+        offset.c_str()
+    );
     outputSize_ += 4; // size of adios_integer
 
-    /*
-    sprintf
-    (
-    		datasetName,
-    		"MESH/%s/processor%i/POINTS",
-    		m.time().timeName().c_str(),
-    		Pstream::myProcNo()
-    );
-    */
-    sprintf(datasetName, "mesh%d/points", r.index_);
-    sprintf(ldimstr, "%d,3", points.size());  // local dimension of the 2D sub-array (n points x 3 coordinates)
-    //sprintf (gdimstr, "%d,3", nTotalPoints);  // global dimension of the 2D array (N points x 3 coordinates)
-    //sprintf (offstr,  "%d,0", myoffset);      // offsets of this process in the 2D array
-    //adios_define_var groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, gdimstr, offstr);
-    adios_define_var(groupID_, datasetName, "", ADIOS_SCALAR, ldimstr, "", "");
+    Info<< "  " << varPath/"npoints" << "global: " << global << "offset:" << offset << endl;
 
-    // count the total size we are going to write from this process
-    outputSize_ += points.size() * 3 * sizeof(ioScalar);
+    // local dimension of the 2D sub-array (n points x 3 coordinates)
+    defineVectorVariable(varPath/"points", ADIOS_SCALAR, points.size());
+
+    varPath = "region" + Foam::name(r.index_) / "polyMesh";
+
+    // local dimension of the 2D sub-array (N points x 3 coordinates)
+    defineVectorVariable(varPath/"points", ADIOS_SCALAR, points.size());
+
+    return 0;
 }
 
 
-void Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
+size_t Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
 {
     Info<< "  meshDefineCells" << endl;
 
@@ -174,7 +372,6 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
     shapeLookupIndex.insert(tetModel->index(), 6);
     shapeLookupIndex.insert(wedgeModel->index(), 5);
     shapeLookupIndex.insert(unknownModel->index(), 0);
-
 
     const cellList& cells  = m.cells();
     const cellShapeList& shapes = m.cellShapes();
@@ -245,7 +442,7 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
     sprintf (datasetName, "mesh%d/ncells", r.index_);
     sprintf (gdimstr, "%d", Pstream::nProcs());      // form a global 1D array of this info
     sprintf (offstr,  "%d", Pstream::myProcNo());      // offsets of this process in the 1D array
-    adios_define_var (groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
+    adios_define_var(groupID_, datasetName, "", adios_integer, "1", gdimstr, offstr);
     outputSize_ += 4; // size of adios_integer
 
     // Define a local 1D array for the Cell dataset for this process
@@ -257,14 +454,16 @@ void Foam::adiosWrite::meshDefineCells(const fvMesh& m, regionInfo& r)
             Pstream::myProcNo()
         );
     */
-    sprintf (datasetName, "mesh%d/cells", r.index_);
-    sprintf (ldimstr, "%d", r.cellDataSizes_[Pstream::myProcNo()]);
-    adios_define_var (groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
+    sprintf(datasetName, "mesh%d/cells", r.index_);
+    sprintf(ldimstr, "%d", r.cellDataSizes_[Pstream::myProcNo()]);
+    adios_define_var(groupID_, datasetName, "", adios_integer, ldimstr, ldimstr, "0");
     outputSize_ += r.cellDataSizes_[Pstream::myProcNo()] * 4; // size of adios_integer
+
+    return 0;
 }
 
 
-void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
+size_t Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
 {
     /*
     Info<< "  meshDefineBoundaries" << endl;
@@ -289,6 +488,8 @@ void Foam::adiosWrite::meshDefineBoundaries(const fvMesh& m, regionInfo& r)
             << nl;
     }
     */
+
+    return 0;
 }
 
 
@@ -296,8 +497,9 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, const regionInfo& r)
 {
     Info<< "  meshWritePoints" << endl;
 
+    fileName varPath = "mesh" + Foam::name(r.index_);
+
     const pointField& points = m.points();
-    char datasetName[80];
 
     // Create a simple array of points (to pass on to adios_write)
     ioScalar pointList[points.size()][3];
@@ -308,9 +510,15 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, const regionInfo& r)
         pointList[ptI][2] = points[ptI].z();
     }
 
-    sprintf(datasetName, "mesh%d/npoints", r.index_);
+    // Find out how many points each process has
+    List<label> nPoints(Pstream::nProcs());
+    nPoints[Pstream::myProcNo()] = points.size();
+    Pstream::gatherList(nPoints);
+    Pstream::scatterList(nPoints);
+
     int n = points.size();
-    adios_write(fileID_, datasetName, &n);
+    writeVariable(varPath/"npoints", &n);
+    Pout<<"npoints: " << n << endl;
 
     // Select correct dataset for this process
     /*sprintf
@@ -320,8 +528,18 @@ void Foam::adiosWrite::meshWritePoints(const fvMesh& m, const regionInfo& r)
             m.time().timeName().c_str(),
             Pstream::myProcNo()
         );*/
-    sprintf(datasetName, "mesh%d/points", r.index_);
-    adios_write(fileID_, datasetName, pointList);
+    writeVariable(varPath/"points", pointList);
+
+    varPath = "region" + Foam::name(r.index_) / "polyMesh";
+
+    Info<<"writing with " << adios_type_to_string(ADIOS_IOSCALAR_TYPE) << endl;
+
+#ifdef ADIOS_USE_SINGLE
+    Info<<"using transcribe for points" << endl;
+    writeVariable(varPath/"points", pointList);
+#else
+    writeVariable(varPath/"points", points.cdata());
+#endif
 }
 
 
@@ -379,20 +597,20 @@ void Foam::adiosWrite::meshWriteCells(const fvMesh& m, const regionInfo& r)
     }
 
 
-    fileName datasetName("mesh" + Foam::name(r.index_)/"nCells");
+    fileName varPath("mesh" + Foam::name(r.index_));
+
+    fileName datasetName("mesh" + Foam::name(r.index_)/"ncells");
     int s = r.cellDataSizes_[Pstream::myProcNo()];
-    adios_write(fileID_, datasetName.c_str(), &s);
+    writeVariable(varPath/"ncells", &s);
 
     // Write a separate 1D array for the Cell dataset for this process
-    /*sprintf
-        (
+    /* sprintf(
             datasetName,
             "MESH/%s/processor%i/CELLS",
             m.time().timeName().c_str(),
             Pstream::myProcNo()
         );*/
-    datasetName = "mesh" + Foam::name(r.index_)/"cells";
-    adios_write(fileID_, datasetName.c_str(), myDataset);
+    writeVariable(varPath/"cells", myDataset);
 }
 
 

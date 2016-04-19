@@ -43,6 +43,19 @@ Foam::OCompactStream::OCompactStream
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
+
+Foam::Ostream& Foam::OCompactStream::write(const char c)
+{
+    if (format() == ASCII || c != token::NL)
+    {
+        // suppress newline for binary streams
+        OSstream::write(c);
+    }
+
+    return *this;
+}
+
+
 Foam::Ostream& Foam::OCompactStream::writeKeyword(const keyType& kw)
 {
     write(kw);

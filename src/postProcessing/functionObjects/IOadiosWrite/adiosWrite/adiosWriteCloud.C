@@ -92,30 +92,29 @@ void Foam::adiosWrite::cloudDefine(regionInfo& r)
           / "clouds" / r.cloudNames_[cloudI]
         );
 
-        adios_define_var(groupID_, "nParticlesPerProc", varPath.c_str(), adios_integer, NULL, NULL, NULL);
-        adios_define_var(groupID_, "nTotalParticles",   varPath.c_str(), adios_integer, NULL, NULL, NULL);
-        outputSize_ += 2*sizeof(int);
+        defineVariable(varPath/"nParticlesPerProc", adios_integer);
+        defineVariable(varPath/"nTotalParticles",   adios_integer);
 
         // integer info datasets
-        adios_define_var(groupID_, "origProc", varPath.c_str(), adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "origId",   varPath.c_str(), adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "cell",     varPath.c_str(), adios_integer, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "currProc", varPath.c_str(), adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"origProc").c_str(), "", adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"origId").c_str(),   "", adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"cell").c_str(),     "", adios_integer, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"currProc").c_str(), "", adios_integer, ldimstr, gdimstr, offsstr);
         outputSize_ += 4 * myParticles * sizeof(int);
 
         // scalar datasets
-        adios_define_var(groupID_, "rho", varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "d",   varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "age", varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"rho").c_str(), "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"d").c_str(),   "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"age").c_str(), "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
         outputSize_ += 3 * myParticles * sizeof(ioScalar);
 
         // vector datasets
         sprintf(gdimstr, "%d,3", r.nTotalParticles_);
         sprintf(ldimstr, "%d,3", myParticles);
-        sprintf(offsstr, "%d,0", offsets[Pstream::myProcNo()]);
-        adios_define_var(groupID_, "position", varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "U",        varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
-        adios_define_var(groupID_, "Us",       varPath.c_str(), ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        sprintf(offsstr, "%d",   offsets[Pstream::myProcNo()]);
+        adios_define_var(groupID_, (varPath/"position").c_str(), "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"U").c_str(),        "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
+        adios_define_var(groupID_, (varPath/"Us").c_str(),       "", ADIOS_SCALAR, ldimstr, gdimstr, offsstr);
         outputSize_ += 3*myParticles*sizeof(ioScalar)*3;
     }
 }
@@ -156,94 +155,116 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         int nparts = myParticles;
         int ntotalparts = r.nTotalParticles_;
 
-        adios_write(fileID_, (varPath/"nParticlesPerProc").c_str(), &nparts);
-        adios_write(fileID_, (varPath/"nTotalParticles").c_str(), &ntotalparts);
+        writeVariable(varPath/"nParticlesPerProc", &nparts);
+        writeVariable(varPath/"nTotalParticles",   &ntotalparts);
 
         // Write original processor ID
-        if (findStrings(r.cloudAttribs_, "origProc"))
         {
-            Info<< "      dataset origProc" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "origProc";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleLabel[i++] = pIter().origProc();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleLabel[i++] = pIter().origProc();
+                }
+                writeVariable(varPath/what, &particleLabel);
             }
-            adios_write(fileID_, (varPath/"origProc").c_str(), &particleLabel);
         }
 
         // Write original ID
-        if (findStrings(r.cloudAttribs_, "origId"))
         {
-            Info<< "      dataset origId" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "origId";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleLabel[i++] = pIter().origId();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleLabel[i++] = pIter().origId();
+                }
+                writeVariable(varPath/what, &particleLabel);
             }
-            adios_write(fileID_, (varPath/"origId").c_str(), &particleLabel);
         }
 
         // Write cell number
-        if (findStrings(r.cloudAttribs_, "cell"))
         {
-            Info<< "      dataset cell" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "cell";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleLabel[i++] = pIter().cell();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleLabel[i++] = pIter().cell();
+                }
+                writeVariable(varPath/what, &particleLabel);
             }
-            adios_write(fileID_, (varPath/"cell").c_str(), &particleLabel);
         }
 
         // Write current process ID
-        if (findStrings(r.cloudAttribs_, "currProc"))
         {
-            Info<< "      dataset currProc" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "currProc";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleLabel[i++] = Pstream::myProcNo();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleLabel[i++] = Pstream::myProcNo();
+                }
+                writeVariable(varPath/what, &particleLabel);
             }
-            adios_write(fileID_, (varPath/"currProc").c_str(), &particleLabel);
         }
+
 
         // Allocate storage for 1-comp. dataset of type 'ioScalar'
         ioScalar particleScalar1[myParticles];
 
         // Write density rho
-        if (findStrings(r.cloudAttribs_, "rho"))
         {
-            Info<< "      dataset rho" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "rho";
+            if (findStrings(r.cloudAttribs_, "rho"))
             {
-                particleScalar1[i++] = pIter().rho();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar1[i++] = pIter().rho();
+                }
+                writeVariable(varPath/what, &particleScalar1);
             }
-            adios_write(fileID_, (varPath/"rho").c_str(), &particleScalar1);
         }
 
         // Write diameter d
-        if (findStrings(r.cloudAttribs_, "d"))
         {
-            Info<< "      dataset d" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "d";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleScalar1[i++] = pIter().d();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar1[i++] = pIter().d();
+                }
+                writeVariable(varPath/what, &particleScalar1);
             }
-            adios_write(fileID_, (varPath/"d").c_str(), &particleScalar1);
         }
 
         // Write age
-        if (findStrings(r.cloudAttribs_, "age"))
         {
-            Info<< "      dataset d" << endl;
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "age";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleScalar1[i++] = pIter().age();
+                Info<< "      dataset " << what << endl;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar1[i++] = pIter().age();
+                }
+                writeVariable(varPath/what, &particleScalar1);
             }
-            adios_write(fileID_, (varPath/"age").c_str(), &particleScalar1);
         }
 
 
@@ -251,46 +272,56 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         ioScalar particleScalar3[myParticles*3];
 
         // Write position
-        if (findStrings(r.cloudAttribs_, "position"))
         {
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "position";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleScalar3[3*i+0] = pIter().position().x();
-                particleScalar3[3*i+1] = pIter().position().y();
-                particleScalar3[3*i+2] = pIter().position().z();
-                i++;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar3[3*i+0] = pIter().position().x();
+                    particleScalar3[3*i+1] = pIter().position().y();
+                    particleScalar3[3*i+2] = pIter().position().z();
+                    i++;
+                }
+                writeVariable(varPath/what, &particleScalar3);
             }
-            adios_write(fileID_, (varPath/"position").c_str(), &particleScalar3);
         }
 
         // Write velocity U
-        if (findStrings(r.cloudAttribs_, "U"))
         {
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "U";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleScalar3[3*i+0] = pIter().U().x();
-                particleScalar3[3*i+1] = pIter().U().y();
-                particleScalar3[3*i+2] = pIter().U().z();
-                i++;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar3[3*i+0] = pIter().U().x();
+                    particleScalar3[3*i+1] = pIter().U().y();
+                    particleScalar3[3*i+2] = pIter().U().z();
+                    i++;
+                }
+                writeVariable(varPath/what, &particleScalar3);
             }
-            adios_write(fileID_, (varPath/"U").c_str(), &particleScalar3);
         }
 
         // Write slip velocity Us = U - Uc
-        if (findStrings(r.cloudAttribs_, "Us"))
         {
-            label i = 0;
-            forAllConstIter(basicKinematicCloud, q, pIter)
+            const word what = "Us";
+            if (findStrings(r.cloudAttribs_, what))
             {
-                particleScalar3[3*i+0] = pIter().U().x() - pIter().Uc().x();
-                particleScalar3[3*i+1] = pIter().U().y() - pIter().Uc().y();
-                particleScalar3[3*i+2] = pIter().U().z() - pIter().Uc().z();
-                i++;
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    particleScalar3[3*i+0] = pIter().U().x() - pIter().Uc().x();
+                    particleScalar3[3*i+1] = pIter().U().y() - pIter().Uc().y();
+                    particleScalar3[3*i+2] = pIter().U().z() - pIter().Uc().z();
+                    i++;
+                }
+                writeVariable(varPath/what, &particleScalar3);
             }
-            adios_write(fileID_, (varPath/"Us").c_str(), &particleScalar3);
         }
+
     }
 }
 

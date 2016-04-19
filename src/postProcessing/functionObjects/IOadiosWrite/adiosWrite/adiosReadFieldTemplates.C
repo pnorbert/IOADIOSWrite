@@ -63,8 +63,6 @@ bool Foam::adiosWrite::fieldRead
             // read fields via dictionary
             IBufStream is(helper.buffer, adiosCore::strFormat);
 
-            // dictionary dict(is);
-
             OFstream os("proc" + Foam::name(Pstream::myProcNo()) + "-" + field.name());
             char c;
             size_t count = 0;
@@ -78,10 +76,14 @@ bool Foam::adiosWrite::fieldRead
             os << "count=" << count << endl;
             os << "nbytes=" << helper.buffer.size() << endl;
 
-            // Info<<"dictionary: " << dict << endl;
+            IBufStream is2(helper.buffer, adiosCore::strFormat);
+            dictionary dict(is2);
+            dict.write(os, false);
 
-            // field.readField(dict, "internalField");
-            // field.boundaryField().readField(field, dict.subDict("boundaryField"));
+            Info<<"dictionary: " << dict << endl;
+
+            field.readField(dict, "internalField");
+            field.boundaryField().readField(field, dict.subDict("boundaryField"));
 
             // TODO: adjust for referenceLevel?
             //

@@ -91,17 +91,18 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
 }
 
 
-size_t Foam::adiosWrite::defineVars()
+size_t Foam::adiosWrite::defineVars(bool updateMesh)
 {
-    Info<< "adiosWrite::defineVars() has been called at time "
+    Info<< "adiosWrite::defineVars(" << (updateMesh ? "updateMesh" : "")
+        << ") has been called at time "
         << obr_.time().timeName()
         << " time index " << obr_.time().timeIndex() << endl;
 
     outputSize_ = 0;
 
     // Define some info scalars: number of regions
-    adios_define_var(groupID_, "nregions", "", adios_integer, NULL, NULL, NULL);
-    outputSize_ += 4;
+    defineVariable("nregions", adios_integer);
+    defineVariable("dummy", adios_integer);
 
     size_t maxLen = 0;
     size_t bufLen = 0;
@@ -110,8 +111,11 @@ size_t Foam::adiosWrite::defineVars()
     {
         regionInfo& rInfo = regions_[regionI];
 
-        meshDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
+        if (updateMesh)
+        {
+            bufLen = meshDefine(rInfo);
+            maxLen = Foam::max(maxLen, bufLen);
+        }
 
         bufLen = fieldDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
@@ -119,6 +123,43 @@ size_t Foam::adiosWrite::defineVars()
         cloudDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
     }
+
+    // OpenFOAM version information
+    defineAttribute
+    (
+        "version",
+        adiosCore::foamAttribute,
+        Foam::FOAMversion
+    );
+
+    // OpenFOAM scalar type (single-precision?)
+    defineAttribute
+    (
+        "precision",
+        adiosCore::foamAttribute,
+#if defined(WM_SP) || defined(ADIOS_USE_SINGLE)
+        "single"
+#elif defined(WM_DP)
+        "double"
+#else
+        "unknown"
+#endif
+    );
+
+    // mesh updated - may also want moved points etc.
+//  enum readUpdateState
+//  {
+//     UNCHANGED,
+//     POINTS_MOVED,
+//     TOPO_CHANGE,
+//     TOPO_PATCH_CHANGE
+//  };
+    defineAttribute
+    (
+        "updateMesh",
+        adiosCore::foamAttribute,
+        updateMesh
+    );
 
     return maxLen;
 }
@@ -358,6 +399,7 @@ void Foam::adiosWrite::write()
         << " time index " << obr_.time().timeIndex() << endl;
 
     size_t maxLen = 0;
+    size_t bufLen = 0;
 
     // Check if we are going to write
     //if ( timeSteps_ == 0 )
@@ -365,6 +407,9 @@ void Foam::adiosWrite::write()
     {
         // Write info to terminal
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
+
+        // Re-write mesh if dynamic or first time
+        const bool updateMesh = (timeSteps_ == 0 || primaryMesh_.changing());
 
         // Classify fields for all regions at every write step in case new
         // variables appear, e.g. via function objects
@@ -378,7 +423,9 @@ void Foam::adiosWrite::write()
             // Note: updating all of them for simplicity
             deleteDefinitions();
         }
-        maxLen = defineVars();
+
+        bufLen = defineVars(updateMesh);
+        maxLen = Foam::max(maxLen, bufLen);
 #else
 
         if (timeSteps_ == 0)
@@ -402,7 +449,8 @@ void Foam::adiosWrite::write()
 
             // ADIOS requires to define all variables before writing anything
             Info<< "Define variables in ADIOS" << endl;
-            maxLen = defineVars();
+            bufLen = defineVars(updateMesh);
+            maxLen = Foam::max(maxLen, bufLen);
         }
         else if (primaryMesh_.changing())
         {
@@ -410,7 +458,8 @@ void Foam::adiosWrite::write()
             Info<< "Redefine all variables in ADIOS because primary mesh has "
                 << "changed at time " << obr_.time().timeName() << endl;
             deleteDefinitions();
-            maxLen = defineVars();
+            bufLen = defineVars(updateMesh);
+            maxLen = Foam::max(maxLen, bufLen);
         }
 #endif
 
@@ -418,17 +467,18 @@ void Foam::adiosWrite::write()
         // are going to write
         open();
 
+        Pout<<"reserve write buffer " << maxLen << endl;
         iobuffer_.reserve(maxLen);
 
         int n = regions_.size();
-        adios_write(fileID_, "nregions", &n);
+        writeVariable("nregions", &n);
 
         forAll(regions_, regionI)
         {
             regionInfo& rInfo = regions_[regionI];
 
             // Re-write mesh if dynamic or first time
-            if (timeSteps_ == 0 || primaryMesh_.changing())
+            if (updateMesh)
             {
                 meshWrite(rInfo);
             }
