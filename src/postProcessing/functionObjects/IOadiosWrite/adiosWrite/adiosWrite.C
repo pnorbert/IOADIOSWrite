@@ -193,6 +193,9 @@ void Foam::adiosWrite::deleteDefinitions()
     // In ADIOS we need to remove all variable definitions in order
     // to make a new list of definitions in case the mesh changes
     adios_delete_vardefs(groupID_);
+
+    // also cleanup all old attributes
+    adios_delete_attrdefs(groupID_);
 }
 
 
