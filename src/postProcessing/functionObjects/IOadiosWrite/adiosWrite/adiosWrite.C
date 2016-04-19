@@ -99,30 +99,8 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         << " time index " << obr_.time().timeIndex() << endl;
 
     outputSize_ = 0;
-
-    // Define some info scalars: number of regions
-    defineVariable("nregions", adios_integer);
-    defineVariable("dummy", adios_integer);
-
     size_t maxLen = 0;
     size_t bufLen = 0;
-
-    forAll(regions_, regionI)
-    {
-        regionInfo& rInfo = regions_[regionI];
-
-        if (updateMesh)
-        {
-            bufLen = meshDefine(rInfo);
-            maxLen = Foam::max(maxLen, bufLen);
-        }
-
-        bufLen = fieldDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
-
-        cloudDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
-    }
 
     // OpenFOAM version information
     defineAttribute
@@ -154,12 +132,53 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
 //     TOPO_CHANGE,
 //     TOPO_PATCH_CHANGE
 //  };
-    defineAttribute
+    defineBoolAttribute
     (
         "updateMesh",
         adiosCore::foamAttribute,
         updateMesh
     );
+
+    // other general information
+    defineIntAttribute("nprocessor", adiosCore::foamAttribute, Pstream::nProcs());
+    defineIntAttribute("nregions",   adiosCore::foamAttribute, regions_.size());
+
+    // Define some info scalars: number of regions
+    defineVariable("nregions", adios_integer);
+
+    forAll(regions_, regionI)
+    {
+        regionInfo& rInfo = regions_[regionI];
+        const fileName varPath = "region" + Foam::name(rInfo.index_);
+
+        const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+        const polyPatchList& patches = mesh.boundaryMesh();
+
+        defineAttribute("name", varPath, rInfo.name_);
+        defineIntAttribute("npatches", varPath, patches.size());
+
+        forAll(patches, patchI)
+        {
+            const polyPatch& p = patches[patchI];
+            fileName patchPath = varPath/"patch" + Foam::name(patchI);
+
+            // global attributes for this patch
+            defineAttribute("name",  patchPath, p.name());
+            defineAttribute("type",  patchPath, p.type());
+        }
+
+        if (updateMesh)
+        {
+            bufLen = meshDefine(rInfo);
+            maxLen = Foam::max(maxLen, bufLen);
+        }
+
+        bufLen = fieldDefine(rInfo);
+        maxLen = Foam::max(maxLen, bufLen);
+
+        cloudDefine(rInfo);
+        maxLen = Foam::max(maxLen, bufLen);
+    }
 
     return maxLen;
 }

@@ -269,7 +269,7 @@ protected:
             (
                 const char* attrName,
                 const char* varName,
-                const std::string& value
+                const string& value
             );
 
             //- Define a string attribute
@@ -277,23 +277,39 @@ protected:
             (
                 const char* attrName,
                 const fileName& varName,
-                const std::string& value
+                const string& value
             );
 
-            //- Define a bool attribute (save as byte)
-            void defineAttribute
+            //- Define a bool attribute (saved as byte)
+            void defineBoolAttribute
             (
                 const char* attrName,
                 const char* varName,
                 const bool value
             );
 
-            //- Define a bool attribute (save as byte)
-            void defineAttribute
+            //- Define a bool attribute (saved as byte)
+            void defineBoolAttribute
             (
                 const char* attrName,
                 const fileName& varName,
                 const bool value
+            );
+
+            //- Define an int attribute
+            void defineIntAttribute
+            (
+                const char* attrName,
+                const char* varName,
+                const int value
+            );
+
+            //- Define an int attribute
+            void defineIntAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const int value
             );
 
             //- Write a variable

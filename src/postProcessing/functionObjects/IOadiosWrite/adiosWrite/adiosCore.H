@@ -41,6 +41,8 @@ SourceFiles
 #include "IBufStream.H"
 #include "OBufStream.H"
 #include "OCountStream.H"
+
+#include "OCompactStringStream.H"
 #include "OCompactBufStream.H"
 #include "OCompactCountStream.H"
 
@@ -99,6 +101,14 @@ public:
 
     //- OpenFOAM global attributes within ADIOS file
     static const char* const foamAttribute;
+
+    typedef OCompactStringStream    OutputStringStreamer;
+    typedef OCompactBufStream       OutputBufStreamer;
+    typedef OCompactCountStream     OutputCounter;
+
+//    typedef OStringStream           OStringStreamer;
+//    typedef OBufStream              OutputBufStreamer;
+//    typedef OCountStream            OutputCounter;
 
 
     // Constructors

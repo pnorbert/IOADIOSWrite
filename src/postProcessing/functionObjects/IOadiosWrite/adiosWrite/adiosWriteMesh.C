@@ -52,7 +52,7 @@ const Foam::cellModel* Foam::adiosWrite::wedgeModel =
 
 size_t Foam::adiosWrite::meshDefine(regionInfo& r)
 {
-    OCompactCountStream os(adiosCore::strFormat);
+    OutputCounter os(adiosCore::strFormat);
     size_t maxLen = 0;
 
     Info<< "adiosWrite::meshDefine: region"
@@ -264,7 +264,7 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
 
     // polyMesh/boundary
     {
-        OCompactBufStream os(iobuffer_, adiosCore::strFormat);
+        OutputBufStreamer os(iobuffer_, adiosCore::strFormat);
         os << mesh.boundaryMesh();
 
         writeVariable(varPath/"boundary", iobuffer_.cdata());

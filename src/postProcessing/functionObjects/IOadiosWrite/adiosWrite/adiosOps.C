@@ -193,7 +193,7 @@ void Foam::adiosWrite::defineAttribute
 (
     const char* attrName,
     const char* varName,
-    const std::string& value
+    const string& value
 )
 {
     adios_define_attribute
@@ -212,14 +212,14 @@ void Foam::adiosWrite::defineAttribute
 (
     const char* attrName,
     const fileName& varName,
-    const std::string& value
+    const string& value
 )
 {
     defineAttribute(attrName, varName.c_str(), value);
 }
 
 
-void Foam::adiosWrite::defineAttribute
+void Foam::adiosWrite::defineBoolAttribute
 (
     const char* attrName,
     const char* varName,
@@ -238,14 +238,46 @@ void Foam::adiosWrite::defineAttribute
 }
 
 
-void Foam::adiosWrite::defineAttribute
+void Foam::adiosWrite::defineBoolAttribute
 (
     const char* attrName,
     const fileName& varName,
     const bool value
 )
 {
-    defineAttribute(attrName, varName.c_str(), value);
+    defineBoolAttribute(attrName, varName.c_str(), value);
+}
+
+
+void Foam::adiosWrite::defineIntAttribute
+(
+    const char* attrName,
+    const char* varName,
+    const int value
+)
+{
+    int intval = value;
+
+    adios_define_attribute_byvalue
+    (
+        groupID_,
+        attrName,
+        varName,
+        adios_integer,
+        1,
+        &intval
+    );
+}
+
+
+void Foam::adiosWrite::defineIntAttribute
+(
+    const char* attrName,
+    const fileName& varName,
+    const int value
+)
+{
+    defineIntAttribute(attrName, varName.c_str(), value);
 }
 
 
