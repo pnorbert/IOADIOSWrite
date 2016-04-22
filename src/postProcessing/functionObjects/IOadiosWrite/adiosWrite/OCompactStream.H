@@ -52,6 +52,12 @@ class OCompactStream
 :
     public OSstream
 {
+    // Private Data
+
+        //- Raw binary output for stream
+        bool raw_;
+
+
     // Private Member Functions
 
         //- Disallow default bitwise copy construct
@@ -77,10 +83,22 @@ public:
 
     // Member functions
 
+        // Access/Edit
+
+            //- Query about raw binary output
+            bool raw() const;
+
+            //- Set/unset raw binary output for stream
+            void raw(bool);
+
+
         // Write functions
 
             //- Write character
             virtual Ostream& write(const char);
+
+            //- Write binary block
+            virtual Ostream& write(const char*, std::streamsize);
 
             // all other writes as per OSstream
             using OSstream::write;
@@ -112,6 +130,46 @@ public:
 
             //- Add newline and flush stream
             virtual void endl();
+
+};
+
+
+/*---------------------------------------------------------------------------*\
+                         Class ORawStream Declaration
+\*---------------------------------------------------------------------------*/
+
+//- A generic output stream using an output with reduced spaces
+//  Supports raw binary output for data blocks.
+class ORawStream
+:
+    public OCompactStream
+{
+    // Private Member Functions
+
+        //- Disallow default bitwise copy construct
+        ORawStream(const ORawStream&);
+
+        //- Disallow default bitwise assignment
+        void operator=(const ORawStream&);
+
+public:
+
+    // Constructors
+
+        //- Set stream status
+        ORawStream
+        (
+            ostream& os,
+            const string& name,
+            streamFormat format=BINARY,
+            versionNumber version=currentVersion,
+            compressionType compression=UNCOMPRESSED
+        )
+        :
+            OCompactStream(os, name, format, version, compression)
+        {
+            raw(true);
+        }
 
 };
 

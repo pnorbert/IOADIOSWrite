@@ -37,11 +37,28 @@ Foam::OCompactStream::OCompactStream
     compressionType compression
 )
 :
-    OSstream(os, name, format, version, compression)
+    OSstream(os, name, format, version, compression),
+    raw_(false)
 {}
 
 
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+
+bool Foam::OCompactStream::raw() const
+{
+    return raw_ && format() != ASCII;
+}
+
+
+void Foam::OCompactStream::raw(bool b)
+{
+    raw_ = b;
+    if (raw_)
+    {
+        format(IOstream::BINARY);
+    }
+}
 
 
 Foam::Ostream& Foam::OCompactStream::write(const char c)
@@ -50,6 +67,29 @@ Foam::Ostream& Foam::OCompactStream::write(const char c)
     {
         // suppress newline for binary streams
         OSstream::write(c);
+    }
+
+    return *this;
+}
+
+
+Foam::Ostream& Foam::OCompactStream::write(const char* buf, std::streamsize count)
+{
+    if (format() != BINARY)
+    {
+        FatalIOErrorInFunction(*this)
+            << "stream format not binary"
+            << abort(FatalIOError);
+    }
+
+    if (raw_)
+    {
+        stdStream().write(buf, count);
+        setState(stdStream().rdstate());
+    }
+    else
+    {
+        OSstream::write(buf, count);
     }
 
     return *this;

@@ -26,7 +26,8 @@ Class
 
 Description
     An output stream for calculating byte counts,
-    using a more compact output (fewer spaces)
+    using a more compact output (fewer spaces).
+    Optionally supports raw binary output for data blocks.
 
 \*---------------------------------------------------------------------------*/
 
@@ -106,6 +107,29 @@ public:
             setGood();  // resynchronize with internal state
         }
 
+};
+
+
+/*---------------------------------------------------------------------------*\
+                       Class ORawCountStream Declaration
+\*---------------------------------------------------------------------------*/
+
+//- An output stream for calculating byte counts,
+//  using a more compact output (fewer spaces).
+//  Supports raw binary output for data blocks.
+class ORawCountStream
+:
+    public OCompactCountStream
+{
+public:
+
+    // Constructors
+
+        //- Construct and set stream status
+        ORawCountStream() : OCompactCountStream()
+        {
+            raw(true);
+        }
 };
 
 

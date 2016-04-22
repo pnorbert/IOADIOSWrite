@@ -108,6 +108,50 @@ public:
 };
 
 
+/*---------------------------------------------------------------------------*\
+                       Class ORawCountStream Declaration
+\*---------------------------------------------------------------------------*/
+
+//- An output stream for calculating byte counts,
+//  using a more compact output (fewer spaces).
+//  Supports raw binary output for data blocks.
+class ORawBufStream
+:
+    public OCompactBufStream
+{
+public:
+
+    // Constructors
+
+        //- Construct using specified buffer for the output
+        ORawBufStream
+        (
+            const UList<char>& buffer,
+            streamFormat format=BINARY,
+            versionNumber version=currentVersion
+        )
+        :
+            OCompactBufStream(buffer, format, version)
+        {
+            raw(true);
+        }
+
+
+        //- Construct using specified buffer for the output
+        ORawBufStream
+        (
+            const DynamicCharList& buffer,
+            streamFormat format=BINARY,
+            versionNumber version=currentVersion
+        )
+        :
+            OCompactBufStream(buffer, format, version)
+        {
+            raw(true);
+        }
+};
+
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
