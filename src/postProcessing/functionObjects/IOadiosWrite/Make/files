@@ -1,4 +1,3 @@
-adiosWrite/OCompactStream.C
 adiosWrite/adiosCore.C
 adiosWrite/adiosReader.C
 adiosWrite/adiosWrite.C
@@ -9,5 +8,9 @@ adiosWrite/adiosWriteCloud.C
 adiosWrite/adiosWriteMesh.C
 adiosWrite/adiosOps.C
 adiosWrite/adiosRestart.C
+
+/* these files should likely migrate into the OpenFOAM src */
+adiosWrite/OCompactStream.C
+adiosWrite/CStringList.C
 
 LIB = $(FOAM_USER_LIBBIN)/libIOadiosWrite

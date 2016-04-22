@@ -21,33 +21,78 @@ License
     You should have received a copy of the GNU General Public License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
-Typedef
-    Foam::DynamicCharList
-
-Description
-    A temporary measure to avoid issues with the resizing template parameters
-    in DynamicList that make it difficult to use for constructors.
-
-    May need to consider refactoring DynamicList to use a non-resizing base
-    class.
 \*---------------------------------------------------------------------------*/
 
-#ifndef DynamicCharList_H
-#define DynamicCharList_H
+#include "CStringList.H"
 
-#include "DynamicList.H"
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-namespace Foam
+Foam::CStringList::CStringList()
+:
+    argc_(0),
+    len_(0),
+    argv_(0),
+    data_(0)
+{}
+
+
+// * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
+
+Foam::CStringList::~CStringList()
 {
+    clear();
+}
 
-typedef DynamicList<char> DynamicCharList;
 
-} // End namespace Foam
+// * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+void Foam::CStringList::clear()
+{
+    argc_ = 0;
+    len_  = 0;
 
-#endif
+    if (data_)
+    {
+        delete[] data_;
+        data_ = 0;
+    }
+    if (argv_)
+    {
+        delete[] argv_;
+        argv_ = 0;
+    }
+}
+
+
+int Foam::CStringList::argc() const
+{
+    return argc_;
+}
+
+
+int Foam::CStringList::size() const
+{
+    return argc_;
+}
+
+
+size_t Foam::CStringList::length() const
+{
+    return len_;
+}
+
+
+char** Foam::CStringList::argv() const
+{
+    return argv_;
+}
+
+
+char* Foam::CStringList::data() const
+{
+    return data_;
+}
+
 
 // ************************************************************************* //

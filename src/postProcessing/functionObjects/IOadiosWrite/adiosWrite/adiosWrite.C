@@ -102,12 +102,12 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     size_t maxLen = 0;
     size_t bufLen = 0;
 
-    // OpenFOAM version information
+    // OpenFOAM build information (also contains version)
     defineAttribute
     (
         "version",
         adiosCore::foamAttribute,
-        Foam::FOAMversion
+        Foam::FOAMbuild
     );
 
     // OpenFOAM scalar type (single-precision?)

@@ -4,7 +4,7 @@
    \\    /   O peration     |
     \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
      \\/     M anipulation  |               2015 Norbert Podhorszki
-                            |               2016 OpenCFD Ltd
+                            |               2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
