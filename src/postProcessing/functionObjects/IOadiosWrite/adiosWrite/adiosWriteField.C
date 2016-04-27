@@ -2,9 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
-     \\/     M anipulation  |               2015 Norbert Podhorszki
-                            |               2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+     \\/     M anipulation  | Copyright (C) 2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -54,10 +53,10 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 
 void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 {
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
-
     Info<< "  adiosWrite::fieldWrite: region "
         << rInfo.index_ << "=" << rInfo.name_ << endl;
+
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
     fieldWrite<volScalarField>(mesh, rInfo, rInfo.scalarFields_);
     fieldWrite<volVectorField>(mesh, rInfo, rInfo.vectorFields_);

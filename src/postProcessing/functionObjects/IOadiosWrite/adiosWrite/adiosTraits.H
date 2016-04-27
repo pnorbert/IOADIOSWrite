@@ -2,7 +2,7 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+    \\  /    A nd           | Copyright (C) 2016 OpenCFD Ltd.
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
@@ -21,26 +21,50 @@ License
     You should have received a copy of the GNU General Public License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
+Class
+    Foam::adiosTraits
+
+Description
+    Mapping of OpenFOAM primitives to ADIOS data types.
+
 \*---------------------------------------------------------------------------*/
 
-#include "adiosWriteFunctionObject.H"
+#ifndef adiosTraits_H
+#define adiosTraits_H
 
-// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-    defineNamedTemplateTypeNameAndDebug
-    (
-        adiosWriteFunctionObject,
-        0
-    );
 
-    addToRunTimeSelectionTable
-    (
-        functionObject,
-        adiosWriteFunctionObject,
-        dictionary
-    );
-}
+/*---------------------------------------------------------------------------*\
+                         Class adiosTraits Declaration
+\*---------------------------------------------------------------------------*/
+
+template<class PrimitiveType>
+class adiosTraits
+:
+    public PrimitiveType
+{
+
+public:
+
+    // Constructors
+
+        //- Construct from primitive
+        adiosTraits(const PrimitiveType& p)
+        :
+            PrimitiveType(p)
+        {}
+};
+
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+} // End namespace Foam
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#endif
 
 // ************************************************************************* //

@@ -1,3 +1,5 @@
+adiosWrite/adiosTypes.C
+
 adiosWrite/adiosCore.C
 adiosWrite/adiosReader.C
 adiosWrite/adiosWrite.C
@@ -6,8 +8,12 @@ adiosWrite/adiosWriteGrouping.C
 adiosWrite/adiosWriteField.C
 adiosWrite/adiosWriteCloud.C
 adiosWrite/adiosWriteMesh.C
+adiosWrite/adiosWriteMeshShapes.C
 adiosWrite/adiosOps.C
 adiosWrite/adiosRestart.C
+
+adiosWrite/ParticleBinaryBlob.C
+adiosWrite/ParticleBinaryBlobFragment.C
 
 /* these files should likely migrate into the OpenFOAM src */
 adiosWrite/OCompactStream.C

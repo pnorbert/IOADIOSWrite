@@ -34,6 +34,8 @@ SourceFiles
 #ifndef adiosCore_H
 #define adiosCore_H
 
+#include "adiosTypes.H"
+
 #include "word.H"
 #include "instantList.H"
 #include "IOstreams.H"
@@ -46,30 +48,12 @@ SourceFiles
 #include "OCompactBufStream.H"
 #include "OCompactCountStream.H"
 
+#include "CStringList.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
-
-#undef ADIOS_USE_SINGLE
-#if defined(WM_SP) || defined(WM_DP)
-# if defined(WRITE_SP) && defined(WM_DP)
-#  define ADIOS_USE_SINGLE
-# endif
-# if defined(WM_SP) || defined(ADIOS_USE_SINGLE)
-   // OpenFOAM scalar is a float
-   // ADIOS enumeration storage type corresponding to the OpenFOAM 'scalar'
-#  define ADIOS_IOSCALAR_TYPE   adios_real      /*ADIOS_DATATYPES*/
-   typedef Foam::floatScalar    adios_ioscalar;
-# else
-   // OpenFOAM scalar is a double
-#  define ADIOS_IOSCALAR_TYPE   adios_double    /*ADIOS_DATATYPES*/
-   typedef Foam::doubleScalar   adios_ioscalar;
-# endif
-#else
-# error "Neither WM_DP nor WM_SP defined when compiling adiosCore"
-#endif
-
 
 /*---------------------------------------------------------------------------*\
                           Class adiosCore Declaration

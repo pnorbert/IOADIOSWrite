@@ -53,7 +53,11 @@ Foam::adiosCore::adiosCore
 )
 :
     name_(name)
-{}
+{
+    // verify assumed sizes now - or emit a fatal error
+    adiosTraits<label>::ok();
+    adiosTraits<scalar>::ok();
+}
 
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //

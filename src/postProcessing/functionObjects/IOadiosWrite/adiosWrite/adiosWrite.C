@@ -27,6 +27,13 @@ License
 #include "adiosWrite.H"
 #include "dictionary.H"
 #include "scalar.H"
+#include "demandDrivenData.H"
+
+// some internal pre-processor stringifications
+#undef STRINGIFY
+#undef TO_STRING
+#define STRINGIFY(x) #x
+#define TO_STRING(x) STRINGIFY(x)
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -49,11 +56,10 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
     dict.lookup("cloudNames")   >> rInfo.cloudNames_;
     dict.lookup("cloudAttribs") >> rInfo.cloudAttribs_;
 
-    // Set length of cell numbers array
-    rInfo.nCells_.setSize(Pstream::nProcs());
-
+#ifdef FOAM_ADIOS_CELL_SHAPES
     // Set length of cell data size array
     rInfo.cellDataSizes_.setSize(Pstream::nProcs());
+#endif
 
     // Set length of particle numbers array
     rInfo.nParticles_.setSize(Pstream::nProcs());
@@ -110,18 +116,33 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         Foam::FOAMbuild
     );
 
+    // OpenFOAM platform tag (WM_ARCH + WM_COMPILER)
+    defineAttribute
+    (
+        "platform",
+        adiosCore::foamAttribute,
+#ifdef FOAM_PLATFORM
+        TO_STRING(FOAM_PLATFORM)
+#else
+        ""
+# error "FOAM_PLATFORM not defined"
+#endif
+    );
+
+    // OpenFOAM label size (32|64)
+    defineIntAttribute
+    (
+        "label-size",
+        adiosCore::foamAttribute,
+        adiosTraits<label>::nBits
+    );
+
     // OpenFOAM scalar type (single-precision?)
     defineAttribute
     (
         "precision",
         adiosCore::foamAttribute,
-#if defined(WM_SP) || defined(ADIOS_USE_SINGLE)
-        "single"
-#elif defined(WM_DP)
-        "double"
-#else
-        "unknown"
-#endif
+        adiosTraits<scalar>::precisionName
     );
 
     // mesh updated - may also want moved points etc.
@@ -132,7 +153,9 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
 //     TOPO_CHANGE,
 //     TOPO_PATCH_CHANGE
 //  };
-    defineBoolAttribute
+
+    // store as integer instead of bool: minimal overhead, more flexibility
+    defineIntAttribute
     (
         "updateMesh",
         adiosCore::foamAttribute,
@@ -140,11 +163,13 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     );
 
     // other general information
-    defineIntAttribute("nprocessor", adiosCore::foamAttribute, Pstream::nProcs());
-    defineIntAttribute("nregions",   adiosCore::foamAttribute, regions_.size());
+    defineIntAttribute("nProcs",    adiosCore::foamAttribute, Pstream::nProcs());
+    defineIntAttribute("nregions",  adiosCore::foamAttribute, regions_.size());
 
-    // Define some info scalars: number of regions
-    defineVariable("nregions", adios_integer);
+    // General information (as variable)
+    defineIntVariable("nregions");      // number of regions
+    defineIntVariable("time/index");
+    defineScalarVariable("time/value");
 
     forAll(regions_, regionI)
     {
@@ -176,7 +201,7 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         bufLen = fieldDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
 
-        cloudDefine(rInfo);
+        bufLen = cloudDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
     }
 
@@ -210,6 +235,7 @@ Foam::adiosWrite::adiosWrite
 )
 :
     adiosCore(groupName),
+    shapeLookupPtr_(NULL),
     obr_(obr),
     primaryMesh_(refCast<const fvMesh>(obr)),
     time_(primaryMesh_.time())
@@ -254,6 +280,8 @@ Foam::adiosWrite::~adiosWrite()
 {
     adios_free_group(groupID_); // not necessary but nice to cleanup
     adios_finalize(Pstream::myProcNo());
+
+    deleteDemandDrivenData(shapeLookupPtr_);
 }
 
 
@@ -312,10 +340,15 @@ void Foam::adiosWrite::read(const dictionary& dict)
     methodParams_ = dict.lookupOrDefault<string>("methodparams", "");
 
     // Print info to terminal
-    int writePrec = sizeof(ioScalar);
     Info<< type() << " " << name() << ":" << endl
-        << "  Compiled with " << writePrec << " bytes precision." << endl
-        << "  writing every " << writeInterval_ << " iterations:" << endl;
+        << "  Compiled with " << adiosTraits<scalar>::adiosSize << " bytes precision." << endl;
+
+    if (sizeof(ioScalar) != adiosTraits<scalar>::adiosSize)
+    {
+        Info<< "  Writing IO with " << sizeof(ioScalar) << " bytes precision." << endl;
+    }
+    Info<< "  writing every " << writeInterval_ << " iterations:" << endl;
+
 
     restartTime_ = VGREAT;
     if (dict.readIfPresent("restartTime", restartTime_))
@@ -492,8 +525,10 @@ void Foam::adiosWrite::write()
         Pout<<"reserve write buffer " << maxLen << endl;
         iobuffer_.reserve(maxLen);
 
-        int n = regions_.size();
-        writeVariable("nregions", &n);
+        // General information (as variable)
+        writeIntVariable("nregions", regions_.size());
+        writeIntVariable("time/index",    time_.timeIndex());
+        writeScalarVariable("time/value", time_.timeOutputValue());
 
         forAll(regions_, regionI)
         {

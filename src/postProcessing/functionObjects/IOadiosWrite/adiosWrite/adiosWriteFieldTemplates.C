@@ -2,9 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
-     \\/     M anipulation  |               2015 Norbert Podhorszki
-                            |               2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+     \\/     M anipulation  | Copyright (C) 2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -59,16 +58,6 @@ size_t Foam::adiosWrite::fieldDefine
         bufLen = os.size();
         maxLen = Foam::max(maxLen, bufLen);
 
-//         OutputStringStreamer check(adiosCore::strFormat);
-//         check << field;
-//         size_t oslen = check.str().size();
-//
-//         Pout<< "    fieldDefine: " << varPath
-//             << "  (size " << field.size() << ")"
-//             << "  stream-size " << oslen << " (counted " << bufLen << ")" << endl
-//             << "  stream-content " << check.str().c_str() << endl
-//             << "  ----" << endl;
-
         defineVariable(varPath, adios_unsigned_byte, bufLen);
 
         // volScalarField etc.
@@ -99,21 +88,21 @@ size_t Foam::adiosWrite::fieldDefine
             localDim += "," + Foam::name(nCmpt);
         }
 
+        // internalField
         // store local to this process
-        // Type is float or double depending on OpenFOAM precision
         adios_define_var
         (
             groupID_,
             varPath.c_str(),
-            "",
-            ADIOS_SCALAR,
+            NULL,
+            adiosTraits<scalar>::adiosType,
             localDim.c_str(),
-            "",
-            ""
+            NULL,
+            NULL
         );
 
         // Count the total size we are going to write from this process
-        outputSize_ += nCmpt * field.size() * sizeof(ioScalar);
+        outputSize_ += nCmpt * field.size() * adiosTraits<scalar>::adiosSize;
 
         forAll(bfield, patchI)
         {
@@ -182,7 +171,7 @@ void Foam::adiosWrite::fieldWrite
         }
 
         // Do the actual write (as stream)
-        writeVariable(varPath, iobuffer_.cdata());
+        writeVariable(varPath, iobuffer_);
 
 #ifdef FOAM_ADIOS_PATCH_WRITE
         varPath = "region" + Foam::name(rInfo.index_) / "fields" / fields[fieldI];
@@ -190,7 +179,7 @@ void Foam::adiosWrite::fieldWrite
         Info<< "    fieldWrite: " << varPath << endl;
 
         // write internalField
-        writeVariable(varPath, field.internalField().cdata());
+        writeVariable(varPath, field.internalField());
 
         const typename FieldType::GeometricBoundaryField& bfield =
             field.boundaryField();
@@ -208,7 +197,7 @@ void Foam::adiosWrite::fieldWrite
                 os << pf;
             }
 
-            writeVariable(patchPath, iobuffer_.cdata());
+            writeVariable(patchPath, iobuffer_);
         }
 
 #endif /* FOAM_ADIOS_PATCH_WRITE */

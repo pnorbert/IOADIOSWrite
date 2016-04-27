@@ -54,11 +54,33 @@ Author
 
 #include "adios.h"
 #include "adios_read.h"
-#include <stdio.h> // sprintf
 
-#define FOAM_ADIOS_PATCH_WRITE
+/**
+ * write with cell-shapes to XDMF ids - will fail for non-primitive cell shapes
+ */
+// #define FOAM_ADIOS_CELL_SHAPES
+// #undef  FOAM_ADIOS_CELL_SHAPES
+
+/**
+ * write internal fields and patch fields separately
+ * poor prospects for restart
+ */
 // #define FOAM_ADIOS_PATCH_WRITE
 // #undef  FOAM_ADIOS_PATCH_WRITE
+
+/**
+ * write cloud fields via explicit definition
+ * poor prospects for restart
+ */
+// #define FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+// #undef  FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+
+/**
+ * expand the particle information into separate fields
+ * useful for debugging
+ */
+// #define FOAM_ADIOS_CLOUD_EXPAND
+// #undef  FOAM_ADIOS_CLOUD_EXPAND
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
@@ -67,10 +89,10 @@ namespace Foam
 // If OpenFOAM is compiled with single precision, the IO will be single
 // precision.
 #if defined(WM_SP) || defined(WRITE_SP)
-# define ADIOS_SCALAR   adios_real
+# define ADIOS_IOSCALAR adios_real
 typedef float ioScalar;
 #elif defined(WM_DP)
-# define ADIOS_SCALAR   adios_double
+# define ADIOS_IOSCALAR adios_double
 typedef double ioScalar;
 #else
 # error "Neither WM_DP nor WM_SP defined when compiling adiosCore"
@@ -79,7 +101,6 @@ typedef double ioScalar;
 // Forward declaration of classes
 class objectRegistry;
 class dictionary;
-//class fvMesh;
 
 /*---------------------------------------------------------------------------*\
                          Class adiosWrite Declaration
@@ -89,6 +110,11 @@ class adiosWrite
 :
     public adiosCore
 {
+private:
+    // Demand driven private data
+    mutable Map<label>* shapeLookupPtr_;
+
+
 protected:
 
     // Protected classes
@@ -137,13 +163,12 @@ protected:
             //- Categorized scalar/vector/tensor surf fields
             fieldGroup<scalar> surfaceScalarFields_;
 
-            //- Array containing number of cells per process (often used list)
-            List<label> nCells_;
-
+#ifdef FOAM_ADIOS_CELL_SHAPES
             //- Number of data points in output Cell array on each process
             //  calculated in meshDefineCells, used in meshWriteCells
             //  only the local size is used currently
             List<label> cellDataSizes_;
+#endif
 
             //- Array containing number of particles per process (often used list)
             List<label> nParticles_;
@@ -216,15 +241,20 @@ protected:
         //- Buffer for reading/writing streamed content to/from adious files
         DynamicCharList iobuffer_;
 
+protected:
+
     // Protected Member Functions
 
         // General functions
 
-            // Create and open dataset for all data
+            //- Create and open dataset for all data
             void open();
 
-            // Close dataset
+            //- Close dataset
             void close();
+
+            //- Mapping from OpenFOAM cell shapes to XDMF
+            const Map<label>& shapeLookupMap() const;
 
 
         // General adios handling
@@ -247,6 +277,54 @@ protected:
                 size_t count = 1
             );
 
+            //- Define a double variable containing one element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the variable size
+            size_t defineScalarVariable
+            (
+                const char* name
+            );
+
+            //- Define a double variable containing one element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the variable size
+            size_t defineScalarVariable
+            (
+                const fileName& name
+            );
+
+            //- Define an integer variable containing one element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the variable size
+            size_t defineIntVariable
+            (
+                const char* name
+            );
+
+            //- Define an integer variable containing one element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the variable size
+            size_t defineIntVariable
+            (
+                const fileName& name
+            );
+
+            //- Define a string variable with count length
+            //  Increment the output size and return the variable size
+            size_t defineStringVariable
+            (
+                const char* name,
+                size_t count
+            );
+
+            //- Define a string variable with count length
+            //  Increment the output size and return the variable size
+            size_t defineStringVariable
+            (
+                const fileName& name,
+                size_t count
+            );
+
             //- Define a vector (3 items) variable with count elements
             //  Increment the output size and return the variable size
             size_t defineVectorVariable
@@ -313,6 +391,30 @@ protected:
                 const int value
             );
 
+            //- Define an integer array attribute
+            bool defineListAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const UList<int>& list
+            );
+
+            //- Define a string array attribute
+            bool defineListAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const wordList& list
+            );
+
+            //- Define a string array attribute
+            bool defineListAttribute
+            (
+                const char* attrName,
+                const fileName& varName,
+                const stringList& list
+            );
+
             //- Write a variable
             void writeVariable
             (
@@ -325,6 +427,56 @@ protected:
             (
                 const fileName& name,
                 const void* value
+            );
+
+            //- Write a variable
+            template<class T>
+            void writeVariable
+            (
+                const char* name,
+                const UList<T>& list
+            )
+            {
+                writeVariable(name, list.cdata());
+            }
+
+            //- Write a variable
+            template<class T>
+            void writeVariable
+            (
+                const fileName& name,
+                const UList<T>& list
+            )
+            {
+                writeVariable(name, list.cdata());
+            }
+
+            //- Write a variable with a single double value
+            void writeScalarVariable
+            (
+                const char* name,
+                const double value
+            );
+
+            //- Write a variable with a single double value
+            void writeScalarVariable
+            (
+                const fileName& name,
+                const double value
+            );
+
+            //- Write a variable with a single integer
+            void writeIntVariable
+            (
+                const char* name,
+                const int value
+            );
+
+            //- Write a variable with a single integer
+            void writeIntVariable
+            (
+                const fileName& name,
+                const int value
             );
 
 
@@ -377,7 +529,7 @@ protected:
       // Functions for handling particle cloud data
 
             //- Cloud define wrapper
-            void cloudDefine(regionInfo&);
+            size_t cloudDefine(regionInfo&);
 
             //- Cloud write wrapper
             void cloudWrite(const regionInfo&);
@@ -391,7 +543,7 @@ protected:
                 label nCmps,
                 void* databuf,
                 char* datasetName,
-                ioScalar atype
+                ioScalar attrType
             );
 
 
@@ -400,23 +552,18 @@ protected:
             //- Mesh define wrapper
             size_t meshDefine(regionInfo&);
 
-            //- Define points
-            size_t meshDefinePoints(const fvMesh&, regionInfo&);
-
-            //- Define cells
-            size_t meshDefineCells(const fvMesh&, regionInfo&);
-
-            //- Define Boundary meshes
-            size_t meshDefineBoundaries(const fvMesh&, regionInfo&);
-
             //- Mesh write wrapper
             void meshWrite(const regionInfo&);
 
-            //- Write points
-            void meshWritePoints(const fvMesh&, const regionInfo&);
 
-            //- Write cells
-            void meshWriteCells(const fvMesh&, const regionInfo&);
+#ifdef FOAM_ADIOS_CELL_SHAPES
+
+            //- Define variable and size for cell shapes
+            void meshDefineCellShapes(const fvMesh&, regionInfo&);
+
+            //- Write cell shapes
+            void meshWriteCellShapes(const fvMesh&, const regionInfo&);
+#endif
 
 
         // Miscallenous definitions
@@ -442,15 +589,6 @@ protected:
             size_t defineVars(const bool updateMesh);
 
             void deleteDefinitions();
-
-        //- Pointers to cell shape models
-        static const cellModel* unknownModel;
-        static const cellModel* tetModel;
-        static const cellModel* pyrModel;
-        static const cellModel* prismModel;
-        static const cellModel* hexModel;
-        static const cellModel* wedgeModel;
-
 
         // Restart functions
 

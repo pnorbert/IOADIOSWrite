@@ -6,7 +6,7 @@ sinclude $(RULES)/mplib$(WM_MPLIB)
 ADIOS_INC  := -I${ADIOS_DIR}/include -g -O0
 ADIOS_LIBS := ${shell ${ADIOS_DIR}/bin/adios_config -l}
 
-EXE_INC = -UWRITE_SP \
+EXE_INC = -UWRITE_SP -DFOAM_PLATFORM="$(WM_ARCH)$(WM_COMPILER)" \
     $(PFLAGS) $(PINC) \
     $(ADIOS_INC) \
     -I$(LIB_SRC)/lagrangian/basic/lnInclude \

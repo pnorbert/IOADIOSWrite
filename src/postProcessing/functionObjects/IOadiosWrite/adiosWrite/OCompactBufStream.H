@@ -109,12 +109,12 @@ public:
 
 
 /*---------------------------------------------------------------------------*\
-                       Class ORawCountStream Declaration
+                        Class ORawBufStream Declaration
 \*---------------------------------------------------------------------------*/
 
-//- An output stream for calculating byte counts,
-//  using a more compact output (fewer spaces).
-//  Supports raw binary output for data blocks.
+//- A version of OStringStream that uses an externally managed buffer for
+//  its output and using a more compact output (fewer spaces) and raw
+//  binary output
 class ORawBufStream
 :
     public OCompactBufStream
