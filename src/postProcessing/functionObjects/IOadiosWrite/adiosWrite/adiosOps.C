@@ -122,6 +122,7 @@ size_t Foam::adiosWrite::defineVariable
     size_t count
 )
 {
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -133,11 +134,12 @@ size_t Foam::adiosWrite::defineVariable
         NULL                            // local offsets
     );
 
-    int sz = count * adios_type_size(type, NULL);
+    // in the future:
+    // uint64_t varsize = adios_expected_var_size(varid);
+    size_t varsize = count * adios_type_size(type, NULL);
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -157,6 +159,7 @@ size_t Foam::adiosWrite::defineIntVariable
     const char* name
 )
 {
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -168,11 +171,10 @@ size_t Foam::adiosWrite::defineIntVariable
         Foam::name(Pstream::myProcNo()).c_str() // offsets of this process into array
     );
 
-    int sz = adios_type_size(adios_integer, NULL);
+    size_t varsize = adios_type_size(adios_integer, NULL);
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -191,6 +193,7 @@ size_t Foam::adiosWrite::defineIntVariable
     size_t count
 )
 {
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -202,11 +205,10 @@ size_t Foam::adiosWrite::defineIntVariable
         NULL                            // local offsets
     );
 
-    int sz = count * adiosTraits<label>::adiosSize;
+    size_t varsize = count * adiosTraits<label>::adiosSize;
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -225,6 +227,7 @@ size_t Foam::adiosWrite::defineScalarVariable
     const char* name
 )
 {
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -236,11 +239,10 @@ size_t Foam::adiosWrite::defineScalarVariable
         Foam::name(Pstream::myProcNo()).c_str() // offsets of this process into array
     );
 
-    size_t sz = adiosTraits<scalar>::adiosSize;
+    size_t varsize = adiosTraits<scalar>::adiosSize;
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -259,6 +261,7 @@ size_t Foam::adiosWrite::defineScalarVariable
     size_t count
 )
 {
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -270,11 +273,10 @@ size_t Foam::adiosWrite::defineScalarVariable
         NULL                            // local offsets
     );
 
-    int sz = count * adiosTraits<scalar>::adiosSize;
+    size_t varsize = count * adiosTraits<scalar>::adiosSize;
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -297,6 +299,7 @@ size_t Foam::adiosWrite::defineStreamVariable
     // use unsigned byte:
     // keeps people from thinking that the min/max statistics have any meaning
 
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -332,6 +335,7 @@ size_t Foam::adiosWrite::defineVectorVariable
     string globalDims = Foam::name(Pstream::nProcs()) + ",3";
     string offsetDims = Foam::name(Pstream::myProcNo());
 
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -343,11 +347,10 @@ size_t Foam::adiosWrite::defineVectorVariable
         offsetDims.c_str()              // offsets of this process into array
     );
 
-    size_t sz = 3*adiosTraits<scalar>::adiosSize;
+    size_t varsize = 3*adiosTraits<scalar>::adiosSize;
+    outputSize_ += varsize;
 
-    outputSize_ += sz;
-
-    return sz;
+    return varsize;
 }
 
 
@@ -368,6 +371,7 @@ size_t Foam::adiosWrite::defineVectorVariable
 {
     string localDims = Foam::name(count) + ",3";
 
+    // int64_t varid =
     adios_define_var
     (
         groupID_,
@@ -379,10 +383,10 @@ size_t Foam::adiosWrite::defineVectorVariable
         NULL                            // local offsets
     );
 
-    int sz = count * 3*adiosTraits<scalar>::adiosSize;
-    outputSize_ += sz;
+    size_t varsize = count * 3*adiosTraits<scalar>::adiosSize;
+    outputSize_ += varsize;
 
-    return sz;
+    return varsize;
 }
 
 

@@ -45,10 +45,17 @@ static inline Foam::fileName oldCloudPath(Foam::label index, std::string name)
 
 size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 {
+    size_t bufLen = 0;
+    size_t maxLen = 0;
+
     Info<< "  adiosWrite::cloudDefine: region "
         << r.index_ << " " << r.name_ << ": " << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+
+#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+    cloudDefineExplicit(r);
+#endif
 
     // HashTable<const cloud*> allClouds = mesh.lookupClass<cloud>();
 
@@ -70,8 +77,377 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 //         }
 //     }
 
-    size_t bufLen = 0;
-    size_t maxLen = 0;
+    label nClouds = 0;
+    forAll(r.cloudNames_, cloudI)
+    {
+        Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
+
+        const kinematicCloud& cloud =
+            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+
+        const basicKinematicCloud& q =
+            static_cast<const basicKinematicCloud&>(cloud);
+
+        // Number of particles on this process
+        const label myParticles = q.size();
+
+        // Find the number of particles on each process
+        r.nParticles_[Pstream::myProcNo()] = myParticles;
+        Pstream::gatherList(r.nParticles_);
+        Pstream::scatterList(r.nParticles_);
+
+        // Sum total number of particles on all processes
+        r.nTotalParticles_ = sum(r.nParticles_);
+
+        // If the cloud contains no particles, jump to the next cloud
+        if (r.nTotalParticles_ == 0)
+        {
+            Info<< "    " << r.cloudNames_[cloudI]
+                <<": No particles in cloud. Skipping definition."
+                << endl;
+
+            continue;
+        }
+
+        const fileName varPath = r.cloudPath(nClouds++);
+
+        defineAttribute("class", varPath, cloud.type());  // cloud type
+        defineAttribute("name",  varPath, q.name());      // cloud name
+
+        // total number of particles as an attribute
+        defineIntAttribute("nParticle", varPath, r.nTotalParticles_);
+
+        // number of particles per processor as a field
+        defineIntVariable(varPath/"nParticle");
+
+        // determine blob sizes
+
+        List<label> blobSize(Pstream::nProcs(), 0);
+        if (myParticles)
+        {
+            ORawCountStream os;  // always raw binary content
+            os << *(q.first());
+            blobSize[Pstream::myProcNo()] = os.size();
+        }
+        Pstream::gatherList(blobSize);
+        Pstream::scatterList(blobSize);
+
+        Info<< "particles: " << r.nParticles_ << endl;
+        Info<< "blob-size: " << blobSize << endl;
+
+        ParticleBinaryBlob blob
+        (
+            basicKinematicCloud::particleType::propertyTypes(),
+            basicKinematicCloud::particleType::propertyList()
+        );
+
+        Info<< "Blob Mapping\n" << blob << nl
+            << "expected blob size " <<  blob.byteSize() << nl
+            << blob.types() << nl << blob.names() << endl;
+
+        // common - local offset value
+        label localOffset = 0;
+        for (label procI=1; procI < Pstream::nProcs(); ++procI)
+        {
+            localOffset += r.nParticles_[procI-1];
+        }
+        const string offsetDims = Foam::name(localOffset);
+
+        // for scalars
+        const string localDims  = Foam::name(myParticles);
+        const string globalDims = Foam::name(r.nTotalParticles_);
+
+        // for vectors
+        const string localDims3  = localDims  + ",3";
+        const string globalDims3 = globalDims + ",3";
+
+        {
+            // stream contents
+            const fileName varName = varPath/"__blob__";
+
+            const string localBlob  = localDims  + "," + Foam::name(blob.byteSize());
+            const string globalBlob = globalDims + "," + Foam::name(blob.byteSize());
+
+            adios_define_var
+            (
+                groupID_,
+                varName.c_str(),                // name
+                NULL,                           // path (deprecated)
+                adios_unsigned_byte,            // data-type
+                localBlob.c_str(),              // local dimensions
+                globalBlob.c_str(),             // global dimensions
+                offsetDims.c_str()              // local offsets
+            );
+
+            bufLen = myParticles * blob.byteSize();
+            maxLen = Foam::max(maxLen, bufLen);
+
+            outputSize_ += bufLen;
+
+            defineListAttribute("names",     varName, blob.names());
+            defineListAttribute("types",     varName, blob.types());
+            defineListAttribute("offset",    varName, blob.offsets());
+            defineListAttribute("byte-size", varName, blob.byteSizes());
+        }
+
+        // additional output
+        label nLabels  = 0;
+        label nScalars = 0;
+        label nVectors = 0;
+
+        // additional output - declare in case it is used
+        {
+            adios_define_var
+            (
+                groupID_,
+                (varPath/"Us").c_str(),
+                NULL,
+                adiosTraits<scalar>::adiosType,
+                localDims3.c_str(),
+                globalDims3.c_str(),
+                offsetDims.c_str()
+            );
+            ++nVectors;
+        }
+
+
+#ifdef FOAM_ADIOS_CLOUD_EXPAND
+        // walk the blob framents
+        {
+            forAllConstIter(SLList<ParticleBinaryBlob::Fragment>, blob, iter)
+            {
+                const ParticleBinaryBlob::Fragment& frag = *iter;
+
+                if (frag.type() == pTraits<label>::typeName)
+                {
+                    adios_define_var
+                    (
+                        groupID_,
+                        (varPath/frag.name()).c_str(),
+                        NULL,
+                        adiosTraits<label>::adiosType,
+                        localDims.c_str(),
+                        globalDims.c_str(),
+                        offsetDims.c_str()
+                    );
+                    ++nLabels;
+                }
+                else if (frag.type() == pTraits<scalar>::typeName)
+                {
+                    adios_define_var
+                    (
+                        groupID_,
+                        (varPath/frag.name()).c_str(),
+                        NULL,
+                        adiosTraits<scalar>::adiosType,
+                        localDims.c_str(),
+                        globalDims.c_str(),
+                        offsetDims.c_str()
+                    );
+                    ++nScalars;
+                }
+                else if (frag.type() == pTraits<vector>::typeName)
+                {
+                    adios_define_var
+                    (
+                        groupID_,
+                        (varPath/frag.name()).c_str(),
+                        NULL,
+                        adiosTraits<scalar>::adiosType,
+                        localDims3.c_str(),
+                        globalDims3.c_str(),
+                        offsetDims.c_str()
+                    );
+                    ++nVectors;
+                }
+            }
+        }
+#endif /* FOAM_ADIOS_CLOUD_EXPAND */
+
+        outputSize_ += myParticles *
+        (
+            nLabels    * adiosTraits<label>::adiosSize
+          + nScalars   * adiosTraits<scalar>::adiosSize
+          + 3*nVectors * adiosTraits<scalar>::adiosSize
+        );
+    }
+
+    if (nClouds)
+    {
+        const fileName varName = r.regionPath();
+
+        // number of active clouds as region attribute
+        defineIntAttribute("nClouds", varName, nClouds);
+    }
+
+    return maxLen;
+}
+
+
+void Foam::adiosWrite::cloudWrite(const regionInfo& r)
+{
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+    Info<< "  adiosWrite::cloudWrite: region "
+        << r.index_ << " " << r.name_ << ": " << endl;
+
+#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+    cloudWriteExplicit(r);
+#endif
+
+    DynamicList<label> labelBuffer;
+    DynamicList<scalar> scalarBuffer;
+
+    label nClouds = 0;
+    forAll(r.cloudNames_, cloudI)
+    {
+        Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
+        Info<< "    Properties " <<  basicKinematicCloud::particleType::propertyList() << endl;
+
+        // If the cloud contains no particles, jump to the next cloud
+        if (r.nTotalParticles_ == 0)
+        {
+            continue;
+        }
+
+        const kinematicCloud& cloud =
+            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+        const basicKinematicCloud& q =
+            static_cast<const basicKinematicCloud&>(cloud);
+
+        // Number of particles on this process
+        const label myParticles = q.size();
+
+        const fileName varPath = r.cloudPath(nClouds++);
+
+        // number of particles per processor as a field
+        writeIntVariable(varPath/"nParticle", myParticles);
+
+        // stream contents
+        {
+            ORawBufStream os(iobuffer_);  // always raw binary content
+
+            forAllConstIter(basicKinematicCloud, q, pIter)
+            {
+                os << *pIter;
+            }
+        }
+
+        writeVariable(varPath/"__blob__", iobuffer_);
+
+        labelBuffer.reserve(myParticles);
+        scalarBuffer.reserve(3*myParticles);
+
+        // buffer for 'label'
+        labelBuffer.setSize(myParticles);
+
+        // buffer for 'vector'
+        scalarBuffer.setSize(3*myParticles);
+
+        // Write slip velocity Us = U - Uc
+        {
+            const word what = "Us";
+            if (findStrings(r.cloudAttribs_, what))
+            {
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    scalarBuffer[3*i+0] = pIter().U().x() - pIter().Uc().x();
+                    scalarBuffer[3*i+1] = pIter().U().y() - pIter().Uc().y();
+                    scalarBuffer[3*i+2] = pIter().U().z() - pIter().Uc().z();
+                    ++i;
+                }
+                writeVariable(varPath/what, scalarBuffer);
+            }
+        }
+
+#ifdef FOAM_ADIOS_CLOUD_EXPAND
+
+        // expanding particle blob into separate fields
+        // mostly useful for debugging and as a general example of working
+        // with particle blobs
+
+        // walk the blob framents
+        labelBuffer.reserve(myParticles);
+        scalarBuffer.reserve(3*myParticles);
+
+        ParticleBinaryBlob blob
+        (
+            basicKinematicCloud::particleType::propertyTypes(),
+            basicKinematicCloud::particleType::propertyList()
+        );
+
+        List<char> blobBuffer(blob.byteSize() + 32); // extra generous
+        ORawBufStream osblob(blobBuffer);
+
+        labelBuffer.setSize(myParticles);
+        scalarBuffer.setSize(3*myParticles);
+
+        forAllConstIter(SLList<ParticleBinaryBlob::Fragment>, blob, iter)
+        {
+            const ParticleBinaryBlob::Fragment& frag = *iter;
+
+            Info<< frag << endl;
+
+            if (frag.type() == pTraits<label>::typeName)
+            {
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
+
+                    labelBuffer[i] = frag.getLabel(blobBuffer);
+                    ++i;
+                }
+
+                writeVariable(varPath/frag.name(), labelBuffer);
+            }
+            else if (frag.type() == pTraits<scalar>::typeName)
+            {
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
+
+                    scalarBuffer[i] = frag.getScalar(blobBuffer);
+                    ++i;
+                }
+
+                writeVariable(varPath/frag.name(), scalarBuffer);
+            }
+            else if (frag.type() == pTraits<vector>::typeName)
+            {
+                label i = 0;
+                forAllConstIter(basicKinematicCloud, q, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
+                    vector val = frag.getVector(blobBuffer);
+
+                    scalarBuffer[3*i+0] = val.x();
+                    scalarBuffer[3*i+1] = val.y();
+                    scalarBuffer[3*i+2] = val.z();
+                    ++i;
+                }
+
+                writeVariable(varPath/frag.name(), scalarBuffer);
+            }
+        }
+
+#endif /* FOAM_ADIOS_CLOUD_EXPAND */
+    }
+
+}
+
+
+size_t Foam::adiosWrite::cloudDefineExplicit(regionInfo& r)
+{
+#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+    Info<< "  adiosWrite::cloudDefineExplicit: region "
+        << r.index_ << " " << r.name_ << ": " << endl;
+
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
     forAll(r.cloudNames_, cloudI)
     {
@@ -104,30 +480,6 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             continue;
         }
 
-        List<label> blobSize(Pstream::nProcs(), 0);
-        if (myParticles)
-        {
-            ORawCountStream os;  // always raw binary content
-            os << *(q.first());
-            blobSize[Pstream::myProcNo()] = os.size();
-        }
-        Pstream::gatherList(blobSize);
-        Pstream::scatterList(blobSize);
-
-        Info<< "particles: " << r.nParticles_ << endl;
-        Info<< "blob-size: " << blobSize << endl;
-
-        ParticleBinaryBlob blob
-        (
-            basicKinematicCloud::particleType::propertyTypes(),
-            basicKinematicCloud::particleType::propertyList()
-        );
-
-        Info<< "Blob Mapping\n" << blob << nl
-            << "expected blob size " <<  blob.byteSize() << nl
-            << blob.types() << nl << blob.names() << endl;
-
-
         // Calculate offset values
         List<label> offsets(Pstream::nProcs());
         offsets[0] = 0;
@@ -136,9 +488,11 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             offsets[proc] = offsets[proc-1] + r.nParticles_[proc-1];
         }
 
-        fileName varPath;
+        // Define all possible output variables, not necessary to write all of them later
+        const fileName varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
 
-#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+        defineIntVariable(varPath/"nParticlesPerProc");
+        defineIntVariable(varPath/"nTotalParticles");
 
         // Define a variable for dataset name
         char gdimstr[16]; // 1D global array of particles from all processes
@@ -149,147 +503,51 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         sprintf(ldimstr, "%d", myParticles);
         sprintf(offsstr, "%d", offsets[Pstream::myProcNo()]);
 
-        // Define all possible output variables, not necessary to write all of them later
-        varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
-
-        defineVariable(varPath/"nParticlesPerProc", adios_integer);
-        defineVariable(varPath/"nTotalParticles",   adios_integer);
-
         // integer info datasets
         adios_define_var(groupID_, (varPath/"origProc").c_str(), "", adios_integer, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"origId").c_str(),   "", adios_integer, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"cell").c_str(),     "", adios_integer, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"currProc").c_str(), "", adios_integer, ldimstr, gdimstr, offsstr);
-        outputSize_ += 4 * myParticles * sizeof(int);
+        label nLabels = 4;
 
         // scalar datasets
         adios_define_var(groupID_, (varPath/"rho").c_str(), "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"d").c_str(),   "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"age").c_str(), "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
-        outputSize_ += 3 * myParticles * sizeof(ioScalar);
+        label nScalars = 3;
 
         // vector datasets
         sprintf(gdimstr, "%d,3", r.nTotalParticles_);
         sprintf(ldimstr, "%d,3", myParticles);
         sprintf(offsstr, "%d",   offsets[Pstream::myProcNo()]);
+
         adios_define_var(groupID_, (varPath/"position").c_str(), "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"U").c_str(),        "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
         adios_define_var(groupID_, (varPath/"Us").c_str(),       "", ADIOS_IOSCALAR, ldimstr, gdimstr, offsstr);
-        outputSize_ += 3 * myParticles * sizeof(ioScalar) * 3;
+        label nVectors = 3;
 
+        outputSize_ += myParticles *
+        (
+            nLabels    * adiosTraits<label>::adiosSize
+          + nScalars   * sizeof(ioScalar)
+          + 3*nVectors * sizeof(ioScalar)
+        );
+    }
 #endif /* FOAM_ADIOS_CLOUD_EXPLICIT_NAMES */
 
-        varPath = r.cloudPath(r.cloudNames_[cloudI]);
-
-        {
-            // stream contents
-            fileName varName = varPath/"__blob__";
-
-            string globalDims =
-                Foam::name(r.nTotalParticles_) + "," + Foam::name(blob.byteSize());
-
-            string localDims =
-                Foam::name(myParticles) + "," + Foam::name(blob.byteSize());
-
-            string offsetDims = Foam::name(offsets[Pstream::myProcNo()]);
-
-            adios_define_var
-            (
-                groupID_,
-                varName.c_str(),                // name
-                NULL,                           // path (deprecated)
-                adios_unsigned_byte,            // data-type
-                localDims.c_str(),              // local dimensions
-                globalDims.c_str(),             // global dimensions
-                offsetDims.c_str()              // local offsets
-            );
-
-
-            bufLen = myParticles * blob.byteSize();
-            maxLen = Foam::max(maxLen, bufLen);
-
-            outputSize_ += bufLen;
-
-            defineListAttribute("offset",    varName, blob.offsets());
-            defineListAttribute("byte-size", varName, blob.byteSizes());
-            defineListAttribute("types",     varName, blob.types());
-            defineListAttribute("names",     varName, blob.names());
-        }
-
-#ifdef FOAM_ADIOS_CLOUD_EXPAND
-        // walk the blob framents
-        {
-            string localDims  = Foam::name(myParticles);
-            string globalDims = Foam::name(r.nTotalParticles_);
-            string offsetDims = Foam::name(offsets[Pstream::myProcNo()]);
-
-            string localDims3  = Foam::name(myParticles) + ",3";
-            string globalDims3 = Foam::name(r.nTotalParticles_) + ",3";
-
-            forAllConstIter(SLList<ParticleBinaryBlob::Fragment>, blob, iter)
-            {
-                const ParticleBinaryBlob::Fragment& frag = *iter;
-
-                Info<< frag.name() << " -> " << frag.type() << endl;
-
-                if (frag.type() == "label")
-                {
-                    adios_define_var
-                    (
-                        groupID_,
-                        (varPath/frag.name()).c_str(),
-                        NULL,
-                        adiosTraits<label>::adiosType,
-                        localDims.c_str(),
-                        globalDims.c_str(),
-                        offsetDims.c_str()
-                    );
-
-                    outputSize_ += myParticles * adiosTraits<label>::adiosSize;
-                }
-                else if (frag.type() == "scalar")
-                {
-                    adios_define_var
-                    (
-                        groupID_,
-                        (varPath/frag.name()).c_str(),
-                        NULL,
-                        adiosTraits<scalar>::adiosType,
-                        localDims.c_str(),
-                        globalDims.c_str(),
-                        offsetDims.c_str()
-                    );
-
-                    outputSize_ += myParticles * adiosTraits<scalar>::adiosSize;
-                }
-                else if (frag.type() == "vector")
-                {
-                    adios_define_var
-                    (
-                        groupID_,
-                        (varPath/frag.name()).c_str(),
-                        NULL,
-                        adiosTraits<scalar>::adiosType,
-                        localDims3.c_str(),
-                        globalDims3.c_str(),
-                        offsetDims.c_str()
-                    );
-
-                    outputSize_ += myParticles * adiosTraits<scalar>::adiosSize*3;
-                }
-            }
-        }
-#endif /* FOAM_ADIOS_CLOUD_EXPAND */
-    }
-
-    return maxLen;
+    return 0;
 }
 
 
-void Foam::adiosWrite::cloudWrite(const regionInfo& r)
+void Foam::adiosWrite::cloudWriteExplicit(const regionInfo& r)
 {
+#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
+
+    DynamicList<label> labelBuffer;
+    DynamicList<scalar> scalarBuffer;
+
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-    Info<< "  adiosWrite::cloudWrite: region "
+    Info<< "  adiosWrite::cloudWriteExplicit: region "
         << r.index_ << " " << r.name_ << ": " << endl;
 
     forAll(r.cloudNames_, cloudI)
@@ -308,36 +566,18 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         const basicKinematicCloud& q =
             static_cast<const basicKinematicCloud&>(cloud);
 
-        const label myParticles = r.nParticles_[Pstream::myProcNo()];
-
-        fileName varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
+        const label myParticles = q.size();
+        const fileName varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
 
         writeIntVariable(varPath/"nParticlesPerProc", myParticles);
         writeIntVariable(varPath/"nTotalParticles",   r.nTotalParticles_);
 
-        // stream contents
-        fileName varName = r.cloudPath(r.cloudNames_[cloudI]) / "__blob__";
-
-        {
-            ORawBufStream os(iobuffer_);  // always raw binary content
-
-            forAllConstIter(basicKinematicCloud, q, pIter)
-            {
-                os << pIter();
-            }
-        }
-
-        writeVariable(varName, iobuffer_);
-
-        DynamicList<label> labelBuffer;
-        DynamicList<scalar> scalarBuffer;
-
-#ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
         labelBuffer.reserve(myParticles);
-        scalarBuffer.reserve(myParticles*3);
+        scalarBuffer.reserve(3*myParticles);
 
-        // buffer for 'label'
+        // buffer for 'label' and scalar/vector
         labelBuffer.setSize(myParticles);
+        scalarBuffer.setSize(3*myParticles);
 
         // Write original processor ID
         {
@@ -399,9 +639,6 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
             }
         }
 
-        // buffer for 'scalar'
-        scalarBuffer.setSize(myParticles);
-
         // Write density rho
         {
             const word what = "rho";
@@ -448,7 +685,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         }
 
         // buffer for 'vector'
-        scalarBuffer.setSize(myParticles*3);
+        scalarBuffer.setSize(3*myParticles);
 
         // Write position
         {
@@ -461,7 +698,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
                     scalarBuffer[3*i+0] = pIter().position().x();
                     scalarBuffer[3*i+1] = pIter().position().y();
                     scalarBuffer[3*i+2] = pIter().position().z();
-                    i++;
+                    ++i;
                 }
                 writeVariable(varPath/what, scalarBuffer);
             }
@@ -478,16 +715,11 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
                     scalarBuffer[3*i+0] = pIter().U().x();
                     scalarBuffer[3*i+1] = pIter().U().y();
                     scalarBuffer[3*i+2] = pIter().U().z();
-                    i++;
+                    ++i;
                 }
                 writeVariable(varPath/what, scalarBuffer);
             }
         }
-
-#endif /* FOAM_ADIOS_CLOUD_EXPLICIT */
-
-        // buffer for 'vector'
-        scalarBuffer.setSize(myParticles*3);
 
         // Write slip velocity Us = U - Uc
         {
@@ -500,95 +732,14 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
                     scalarBuffer[3*i+0] = pIter().U().x() - pIter().Uc().x();
                     scalarBuffer[3*i+1] = pIter().U().y() - pIter().Uc().y();
                     scalarBuffer[3*i+2] = pIter().U().z() - pIter().Uc().z();
-                    i++;
+                    ++i;
                 }
                 writeVariable(varPath/what, scalarBuffer);
             }
         }
-
-
-#ifdef FOAM_ADIOS_CLOUD_EXPAND
-
-        // expanding particle blob into separate fields
-        // mostly useful for debugging and as a general example of working
-        // with particle blobs
-
-        varPath = r.cloudPath(r.cloudNames_[cloudI]);
-
-        // walk the blob framents
-        labelBuffer.reserve(myParticles);
-        scalarBuffer.reserve(myParticles*3);
-
-        ParticleBinaryBlob blob
-        (
-            basicKinematicCloud::particleType::propertyTypes(),
-            basicKinematicCloud::particleType::propertyList()
-        );
-
-        List<char> blobBuffer(blob.byteSize() + 32); // extra generous
-        ORawBufStream osblob(blobBuffer);
-
-        labelBuffer.setSize(myParticles);
-        scalarBuffer.setSize(myParticles*3);
-
-        forAllConstIter(SLList<ParticleBinaryBlob::Fragment>, blob, iter)
-        {
-            const ParticleBinaryBlob::Fragment& frag = *iter;
-
-            Info<< frag << endl;
-
-            if (frag.type() == "label")
-            {
-                label i = 0;
-                forAllConstIter(basicKinematicCloud, q, pIter)
-                {
-                    osblob.rewind();
-                    osblob << *pIter;   // binary content
-
-                    labelBuffer[i] = frag.getLabel(blobBuffer);
-                    ++i;
-                }
-
-                writeVariable(varPath/frag.name(), labelBuffer);
-            }
-            else if (frag.type() == "scalar")
-            {
-                label i = 0;
-                forAllConstIter(basicKinematicCloud, q, pIter)
-                {
-                    osblob.rewind();
-                    osblob << *pIter;   // binary content
-
-                    scalarBuffer[i] = frag.getScalar(blobBuffer);
-                    ++i;
-                }
-
-                writeVariable(varPath/frag.name(), scalarBuffer);
-            }
-            else if (frag.type() == "vector")
-            {
-                label i = 0;
-                forAllConstIter(basicKinematicCloud, q, pIter)
-                {
-                    osblob.rewind();
-                    osblob << *pIter;   // binary content
-                    vector val = frag.getVector(blobBuffer);
-
-                    scalarBuffer[3*i+0] = val.x();
-                    scalarBuffer[3*i+1] = val.y();
-                    scalarBuffer[3*i+2] = val.z();
-                    ++i;
-                }
-
-                writeVariable(varPath/frag.name(), scalarBuffer);
-            }
-        }
-
-#endif /* FOAM_ADIOS_CLOUD_EXPAND */
-
     }
 
-
+#endif /* FOAM_ADIOS_CLOUD_EXPLICIT_NAMES */
 }
 
 

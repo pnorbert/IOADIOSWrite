@@ -2,9 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
-     \\/     M anipulation  |               2015 Norbert Podhorszki
-                            |               2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+     \\/     M anipulation  | Copyright (C) 2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -174,12 +173,12 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     forAll(regions_, regionI)
     {
         regionInfo& rInfo = regions_[regionI];
-        const fileName varPath = "region" + Foam::name(rInfo.index_);
+        const fileName varPath = rInfo.regionPath();
 
         const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
         const polyPatchList& patches = mesh.boundaryMesh();
 
-        defineAttribute("name", varPath, rInfo.name_);
+        defineAttribute("name",        varPath, rInfo.name_);
         defineIntAttribute("npatches", varPath, patches.size());
 
         forAll(patches, patchI)

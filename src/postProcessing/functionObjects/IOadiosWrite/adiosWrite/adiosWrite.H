@@ -171,28 +171,35 @@ protected:
 #endif
 
             //- Array containing number of particles per process (often used list)
+            //  Note this will have issues when multiple clouds exist
             List<label> nParticles_;
 
             //- Total number of particles (sum of nParticles_ list)
+            //  Note this will have issues when multiple clouds exist
             label nTotalParticles_;
 
+            //- Path name for regions
+            fileName regionPath() const
+            {
+                return "region" + Foam::name(index_);
+            }
 
             //- Path name for fields
             fileName fieldPath(const string& var = string::null) const
             {
-                return "region" + Foam::name(index_) / "field" / var;
+                return regionPath() / "field" / var;
             }
 
             //- Path name for meshes
             fileName meshPath(const string& var = string::null) const
             {
-                return "region" + Foam::name(index_) / "polyMesh" / var;
+                return regionPath() / "polyMesh" / var;
             }
 
-            //- Path name for clouds
-            fileName cloudPath(const string& var = string::null) const
+            //- Path name for cloud-Id
+            fileName cloudPath(label cloudId) const
             {
-                return "region" + Foam::name(index_) / "lagrangian" / var;
+                return regionPath() / ("cloud" + Foam::name(cloudId));
             }
         };
 
@@ -576,6 +583,12 @@ protected:
 
             //- Cloud write wrapper
             void cloudWrite(const regionInfo&);
+
+            //- Cloud define wrapper
+            size_t cloudDefineExplicit(regionInfo&);
+
+            //- Cloud write wrapper
+            void cloudWriteExplicit(const regionInfo&);
 
             //- Write attributes for cloud particles
             void cloudWriteAttrib
