@@ -32,6 +32,15 @@ License
 
 #include <stdio.h> // sprintf
 
+// * * * * * * * * * * * * * * Static Functions  * * * * * * * * * * * * * * //
+
+// file-local
+static inline Foam::fileName oldCloudPath(Foam::label index, std::string name)
+{
+    return "region" + Foam::name(index) / "clouds" / name;
+}
+
+
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
@@ -127,6 +136,8 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             offsets[proc] = offsets[proc-1] + r.nParticles_[proc-1];
         }
 
+        fileName varPath;
+
 #ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
 
         // Define a variable for dataset name
@@ -139,11 +150,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         sprintf(offsstr, "%d", offsets[Pstream::myProcNo()]);
 
         // Define all possible output variables, not necessary to write all of them later
-        fileName varPath
-        (
-            "region" + Foam::name(r.index_)
-          / "clouds" / r.cloudNames_[cloudI]
-        );
+        varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
 
         defineVariable(varPath/"nParticlesPerProc", adios_integer);
         defineVariable(varPath/"nTotalParticles",   adios_integer);
@@ -172,7 +179,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
 #endif /* FOAM_ADIOS_CLOUD_EXPLICIT_NAMES */
 
-        varPath = "region" + Foam::name(r.index_) / "lagrangian" / r.cloudNames_[cloudI];
+        varPath = r.cloudPath(r.cloudNames_[cloudI]);
 
         {
             // stream contents
@@ -303,17 +310,13 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 
         const label myParticles = r.nParticles_[Pstream::myProcNo()];
 
-        fileName varPath
-        (
-            "region" + Foam::name(r.index_)
-          / "clouds" / r.cloudNames_[cloudI]
-        );
+        fileName varPath = oldCloudPath(r.index_, r.cloudNames_[cloudI]);
 
         writeIntVariable(varPath/"nParticlesPerProc", myParticles);
         writeIntVariable(varPath/"nTotalParticles",   r.nTotalParticles_);
 
         // stream contents
-        fileName varName = "region" + Foam::name(r.index_) / "lagrangian" / r.cloudNames_[cloudI] / "__blob__";
+        fileName varName = r.cloudPath(r.cloudNames_[cloudI]) / "__blob__";
 
         {
             ORawBufStream os(iobuffer_);  // always raw binary content
@@ -506,8 +509,11 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 
 #ifdef FOAM_ADIOS_CLOUD_EXPAND
 
-        // stream contents
-        varPath = "region" + Foam::name(r.index_) / "lagrangian" / r.cloudNames_[cloudI];
+        // expanding particle blob into separate fields
+        // mostly useful for debugging and as a general example of working
+        // with particle blobs
+
+        varPath = r.cloudPath(r.cloudNames_[cloudI]);
 
         // walk the blob framents
         labelBuffer.reserve(myParticles);

@@ -26,6 +26,15 @@ License
 #include "adiosWrite.H"
 #include "cellModeller.H"
 
+// * * * * * * * * * * * * * * Static Functions  * * * * * * * * * * * * * * //
+
+// file-local
+static inline Foam::fileName oldMeshPath(Foam::label index)
+{
+    return "mesh" + Foam::name(index);
+}
+
+
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
 const Foam::Map<Foam::label>& Foam::adiosWrite::shapeLookupMap() const
@@ -79,7 +88,7 @@ void Foam::adiosWrite::meshDefineCellShapes(const fvMesh& mesh, regionInfo& r)
 {
     Info<< "  meshDefineCellShapes" << endl;
 
-    fileName varPath = "mesh" + Foam::name(r.index_);
+    fileName varPath = oldMeshPath(r.index_);
 
     // defineIntVariable(varPath/"timeidx");
     // defineScalarVariable(varPath/"time");
@@ -87,24 +96,18 @@ void Foam::adiosWrite::meshDefineCellShapes(const fvMesh& mesh, regionInfo& r)
     // 1D array with number of points on each processor
     defineIntVariable(varPath/"nPoints");
 
-    // polyMesh/points: 2D array (N points x 3 coordinates)
-    defineVectorVariable
-    (
-        varPath/"points",
-        adiosTraits<scalar>::adiosType,
-        mesh.nPoints()
-    );
-
     // 1D array with number of cells on each processor
     defineIntVariable(varPath/"nCells");
+
+    // polyMesh/points: 2D array (N points x 3 coordinates)
+    defineVectorVariable(varPath/"points", mesh.nPoints());
+
 
     // Map shapes OpenFOAM->XDMF
     const Map<label>& shapeLookupIndex = shapeLookupMap();
     const cellShapeList& shapes = mesh.cellShapes();
 
     // Find dataset length for this process
-    // this will possible give a little overhead w.r.t. storage, but on a
-    // hex-dominated mesh, this is OK.
     int j = 0;
     forAll(shapes, cellId)
     {
@@ -137,10 +140,8 @@ void Foam::adiosWrite::meshDefineCellShapes(const fvMesh& mesh, regionInfo& r)
 
             //j++; // we will add a 0 type and no vertices to continue
             //continue;
-            FatalErrorIn
-            (
-                "adiosWrite::meshWriteCells()"
-            )   << "Unsupported or unknown cell type for cell number "
+            FatalErrorInFunction
+                << "Unsupported or unknown cell type for cell number "
                 << cellId
                 << endl
                 << exit(FatalError);
@@ -153,12 +154,7 @@ void Foam::adiosWrite::meshDefineCellShapes(const fvMesh& mesh, regionInfo& r)
     //Pstream::gatherList(r.cellDataSizes_);
     //Pstream::scatterList(r.cellDataSizes_);
 
-    defineVariable
-    (
-        varPath/"cells",
-        adiosTraits<label>::adiosType,
-        r.cellDataSizes_[Pstream::myProcNo()]
-    );
+    defineIntVariable(varPath/"cells", r.cellDataSizes_[Pstream::myProcNo()]);
 }
 
 
@@ -166,26 +162,22 @@ void Foam::adiosWrite::meshWriteCellShapes(const fvMesh& mesh, const regionInfo&
 {
     Info<< "  meshWriteCellShapes" << endl;
 
-    fileName varPath = "mesh" + Foam::name(r.index_);
+    fileName varPath = oldMeshPath(r.index_);
 
     // writeIntVariable(varPath/"timeidx", mesh.time().timeIndex());
     // writeScalarVariable(varPath/"time", mesh.time().timeOutputValue());
 
     // Write mesh
     writeIntVariable(varPath/"nPoints", mesh.nPoints());
-    writeVariable(varPath/"points",     mesh.points());
-
     writeIntVariable(varPath/"nCells",  mesh.nCells());
+    writeVariable(varPath/"points",     mesh.points());
 
     // Map shapes OpenFOAM->XDMF
     const Map<label>& shapeLookupIndex = shapeLookupMap();
     const cellShapeList& shapes = mesh.cellShapes();
 
-    // Find dataset length for this process and fill dataset in one operation
-    // this will possible give a little overhead w.r.t. storage, but on a
-    // hex-dominated mesh, this is OK.
     int j = 0;
-    int labelBuffer[9*mesh.nCells()];
+    label labelBuffer[r.cellDataSizes_[Pstream::myProcNo()]];
     forAll(shapes, cellId)
     {
         const cellShape& shape = shapes[cellId];
@@ -194,10 +186,9 @@ void Foam::adiosWrite::meshWriteCellShapes(const fvMesh& mesh, const regionInfo&
         // A registered primitive type
         if (shapeLookupIndex.found(mapIndex))
         {
-            label shapeId = shapeLookupIndex[mapIndex];
-            const labelList& vrtList = shapes[cellId];
+            labelBuffer[j++] = shapeLookupIndex[mapIndex];
 
-            labelBuffer[j++] = shapeId;
+            const labelList& vrtList = shapes[cellId];
             forAll(vrtList, i)
             {
                 labelBuffer[j++] = vrtList[i];

@@ -51,14 +51,13 @@ size_t Foam::adiosWrite::fieldDefine
         const typename FieldType::GeometricBoundaryField& bfield =
             field.boundaryField();
 
-        fileName varPath = rInfo.fieldVarPath(fields[fieldI]);
+        fileName varPath = rInfo.fieldPath(fields[fieldI]);
 
         os.rewind();
         os << field;
-        bufLen = os.size();
-        maxLen = Foam::max(maxLen, bufLen);
 
-        defineVariable(varPath, adios_unsigned_byte, bufLen);
+        bufLen = defineStreamVariable(varPath, os.size());
+        maxLen = Foam::max(maxLen, bufLen);
 
         // volScalarField etc.
         defineAttribute("class", varPath, field.type());
@@ -119,10 +118,9 @@ size_t Foam::adiosWrite::fieldDefine
 
             os.rewind();
             os << pf;
-            bufLen = os.size();
-            maxLen = Foam::max(maxLen, bufLen);
 
-            defineVariable(patchPath, adios_unsigned_byte, bufLen);
+            bufLen = defineStreamVariable(patchPath, os.size());
+            maxLen = Foam::max(maxLen, bufLen);
 
             // additional attributes to describe this patch
             defineAttribute("name", patchPath, pf.patch().name());
@@ -162,7 +160,7 @@ void Foam::adiosWrite::fieldWrite
         // Lookup field
         const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
 
-        fileName varPath = rInfo.fieldVarPath(fields[fieldI]);
+        fileName varPath = rInfo.fieldPath(fields[fieldI]);
 
         Info<< "    fieldWrite: " << varPath << endl;
         {

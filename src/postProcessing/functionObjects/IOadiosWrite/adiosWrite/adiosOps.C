@@ -152,39 +152,6 @@ size_t Foam::adiosWrite::defineVariable
 }
 
 
-size_t Foam::adiosWrite::defineScalarVariable
-(
-    const char* name
-)
-{
-    adios_define_var
-    (
-        groupID_,
-        name,                           // name
-        NULL,                           // path (deprecated)
-        adiosTraits<scalar>::adiosType, // data-type
-        "1",                            // local dimensions
-        Foam::name(Pstream::nProcs()).c_str(),  // global 1D array of this info
-        Foam::name(Pstream::myProcNo()).c_str() // offsets of this process into array
-    );
-
-    size_t sz = adiosTraits<scalar>::adiosSize;
-
-    outputSize_ += sz;
-
-    return sz;
-}
-
-
-size_t Foam::adiosWrite::defineScalarVariable
-(
-    const fileName& name
-)
-{
-    return defineScalarVariable(name.c_str());
-}
-
-
 size_t Foam::adiosWrite::defineIntVariable
 (
     const char* name
@@ -218,20 +185,124 @@ size_t Foam::adiosWrite::defineIntVariable
 }
 
 
-size_t Foam::adiosWrite::defineStringVariable
+size_t Foam::adiosWrite::defineIntVariable
 (
     const char* name,
     size_t count
 )
 {
-    ++count; // trailing nul
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        NULL,                           // path (deprecated)
+        adiosTraits<label>::adiosType,  // data-type
+        Foam::name(count).c_str(),      // local dimensions
+        NULL,                           // global dimensions
+        NULL                            // local offsets
+    );
+
+    int sz = count * adiosTraits<label>::adiosSize;
+
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineIntVariable
+(
+    const fileName& name,
+    size_t count
+)
+{
+    return defineIntVariable(name.c_str(), count);
+}
+
+
+size_t Foam::adiosWrite::defineScalarVariable
+(
+    const char* name
+)
+{
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        NULL,                           // path (deprecated)
+        adiosTraits<scalar>::adiosType, // data-type
+        "1",                            // local dimensions
+        Foam::name(Pstream::nProcs()).c_str(),  // global 1D array of this info
+        Foam::name(Pstream::myProcNo()).c_str() // offsets of this process into array
+    );
+
+    size_t sz = adiosTraits<scalar>::adiosSize;
+
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineScalarVariable
+(
+    const fileName& name
+)
+{
+    return defineScalarVariable(name.c_str());
+}
+
+
+size_t Foam::adiosWrite::defineScalarVariable
+(
+    const char* name,
+    size_t count
+)
+{
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        NULL,                           // path (deprecated)
+        adiosTraits<scalar>::adiosType, // data-type
+        Foam::name(count).c_str(),      // local dimensions
+        NULL,                           // global dimensions
+        NULL                            // local offsets
+    );
+
+    int sz = count * adiosTraits<scalar>::adiosSize;
+
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineScalarVariable
+(
+    const fileName& name,
+    size_t count
+)
+{
+    return defineScalarVariable(name.c_str(), count);
+}
+
+
+size_t Foam::adiosWrite::defineStreamVariable
+(
+    const char* name,
+    size_t count
+)
+{
+    // use unsigned byte:
+    // keeps people from thinking that the min/max statistics have any meaning
 
     adios_define_var
     (
         groupID_,
         name,                           // name
         NULL,                           // path (deprecated)
-        adios_string,                   // data-type
+        adios_unsigned_byte,            // data-type
         Foam::name(count).c_str(),      // local dimensions
         NULL,                           // global dimensions
         NULL                            // local offsets
@@ -243,20 +314,55 @@ size_t Foam::adiosWrite::defineStringVariable
 }
 
 
-size_t Foam::adiosWrite::defineStringVariable
+size_t Foam::adiosWrite::defineStreamVariable
 (
     const fileName& name,
     size_t count
 )
 {
-    return defineStringVariable(name.c_str(), count);
+    return defineStreamVariable(name.c_str(), count);
+}
+
+
+size_t Foam::adiosWrite::defineVectorVariable
+(
+    const char* name
+)
+{
+    string globalDims = Foam::name(Pstream::nProcs()) + ",3";
+    string offsetDims = Foam::name(Pstream::myProcNo());
+
+    adios_define_var
+    (
+        groupID_,
+        name,                           // name
+        NULL,                           // path (deprecated)
+        adiosTraits<scalar>::adiosType, // data-type
+        "1,3",                          // local dimensions
+        globalDims.c_str(),             // global dimensions
+        offsetDims.c_str()              // offsets of this process into array
+    );
+
+    size_t sz = 3*adiosTraits<scalar>::adiosSize;
+
+    outputSize_ += sz;
+
+    return sz;
+}
+
+
+size_t Foam::adiosWrite::defineVectorVariable
+(
+    const fileName& name
+)
+{
+    return defineVectorVariable(name.c_str());
 }
 
 
 size_t Foam::adiosWrite::defineVectorVariable
 (
     const char* name,
-    enum ADIOS_DATATYPES type,
     size_t count
 )
 {
@@ -267,13 +373,13 @@ size_t Foam::adiosWrite::defineVectorVariable
         groupID_,
         name,                           // name
         NULL,                           // path (deprecated)
-        type,                           // data-type
+        adiosTraits<scalar>::adiosType, // data-type
         localDims.c_str(),              // local dimensions
         NULL,                           // global dimensions
         NULL                            // local offsets
     );
 
-    int sz = 3 * count * adios_type_size(type, NULL);
+    int sz = count * 3*adiosTraits<scalar>::adiosSize;
     outputSize_ += sz;
 
     return sz;
@@ -283,11 +389,10 @@ size_t Foam::adiosWrite::defineVectorVariable
 size_t Foam::adiosWrite::defineVectorVariable
 (
     const fileName& name,
-    enum ADIOS_DATATYPES type,
     size_t count
 )
 {
-    return defineVectorVariable(name.c_str(), type, count);
+    return defineVectorVariable(name.c_str(), count);
 }
 
 
@@ -318,36 +423,6 @@ void Foam::adiosWrite::defineAttribute
 )
 {
     defineAttribute(attrName, varName.c_str(), value);
-}
-
-
-void Foam::adiosWrite::defineBoolAttribute
-(
-    const char* attrName,
-    const char* varName,
-    const bool value
-)
-{
-    adios_define_attribute
-    (
-        groupID_,
-        attrName,
-        varName,
-        adios_byte, // actually a bool
-        (value ? "1" : "0"),
-        NULL
-    );
-}
-
-
-void Foam::adiosWrite::defineBoolAttribute
-(
-    const char* attrName,
-    const fileName& varName,
-    const bool value
-)
-{
-    defineBoolAttribute(attrName, varName.c_str(), value);
 }
 
 
@@ -493,26 +568,6 @@ void Foam::adiosWrite::writeVariable
 }
 
 
-void Foam::adiosWrite::writeScalarVariable
-(
-    const char* name,
-    const double value
-)
-{
-    adios_write(fileID_, name, &value);
-}
-
-
-void Foam::adiosWrite::writeScalarVariable
-(
-    const fileName& name,
-    const double value
-)
-{
-    writeScalarVariable(name.c_str(), value);
-}
-
-
 void Foam::adiosWrite::writeIntVariable
 (
     const char* name,
@@ -530,6 +585,26 @@ void Foam::adiosWrite::writeIntVariable
 )
 {
     writeIntVariable(name.c_str(), value);
+}
+
+
+void Foam::adiosWrite::writeScalarVariable
+(
+    const char* name,
+    const double value
+)
+{
+    adios_write(fileID_, name, &value);
+}
+
+
+void Foam::adiosWrite::writeScalarVariable
+(
+    const fileName& name,
+    const double value
+)
+{
+    writeScalarVariable(name.c_str(), value);
 }
 
 

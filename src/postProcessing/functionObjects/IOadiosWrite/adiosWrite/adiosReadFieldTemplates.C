@@ -57,7 +57,7 @@ bool Foam::adiosWrite::fieldRead
         Pout<< "    readField via dictionary: " << field.name() << endl;
 
         // Read data from file
-        ok = helper.getDataSet(rInfo.fieldVarPath(fields[fieldI]));
+        ok = helper.getDataSet(rInfo.fieldPath(fields[fieldI]));
         if (ok)
         {
             // read fields via dictionary

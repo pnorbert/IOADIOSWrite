@@ -153,7 +153,7 @@ protected:
             //- Names of clouds to write
             wordReList cloudNames_;
 
-            //- Which attributes to write for particle data
+            //- Which (additional) attributes to write for particle data
             wordReList cloudAttribs_;
 
             //- Categorized scalar/vector/tensor vol fields
@@ -176,22 +176,23 @@ protected:
             //- Total number of particles (sum of nParticles_ list)
             label nTotalParticles_;
 
-            //- The standard path name for a field
-            fileName fieldVarPath(const std::string& var) const
+
+            //- Path name for fields
+            fileName fieldPath(const string& var = string::null) const
             {
-                return fileName
-                (
-                    "region" + Foam::name(index_) / "field" / var
-                );
+                return "region" + Foam::name(index_) / "field" / var;
             }
 
-            //- The standard path name for a mesh variable
-            fileName meshVarPath(const std::string& var) const
+            //- Path name for meshes
+            fileName meshPath(const string& var = string::null) const
             {
-                return fileName
-                (
-                    "mesh" + Foam::name(index_) / var
-                );
+                return "region" + Foam::name(index_) / "polyMesh" / var;
+            }
+
+            //- Path name for clouds
+            fileName cloudPath(const string& var = string::null) const
+            {
+                return "region" + Foam::name(index_) / "lagrangian" / var;
             }
         };
 
@@ -260,86 +261,130 @@ protected:
         // General adios handling
 
             //- Define a variable with count elements
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineVariable
             (
                 const char* name,
                 enum ADIOS_DATATYPES type,
-                size_t count = 1
+                size_t count
             );
 
             //- Define a variable with count elements
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineVariable
             (
                 const fileName& name,
                 enum ADIOS_DATATYPES type,
-                size_t count = 1
+                size_t count
             );
 
-            //- Define a double variable containing one element
+            //- Define an integer variable containing a single element
             //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the variable size
-            size_t defineScalarVariable
-            (
-                const char* name
-            );
-
-            //- Define a double variable containing one element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the variable size
-            size_t defineScalarVariable
-            (
-                const fileName& name
-            );
-
-            //- Define an integer variable containing one element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineIntVariable
             (
                 const char* name
             );
 
-            //- Define an integer variable containing one element
+            //- Define an integer variable containing a single element
             //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineIntVariable
             (
                 const fileName& name
             );
 
-            //- Define a string variable with count length
-            //  Increment the output size and return the variable size
-            size_t defineStringVariable
+            //- Define an integer variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineIntVariable
             (
                 const char* name,
                 size_t count
             );
 
-            //- Define a string variable with count length
-            //  Increment the output size and return the variable size
-            size_t defineStringVariable
+            //- Define an integer variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineIntVariable
             (
                 const fileName& name,
                 size_t count
             );
 
+            //- Define a double variable containing a single element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the storage size
+            size_t defineScalarVariable
+            (
+                const char* name
+            );
+
+            //- Define a double variable containing a single element
+            //  To be stored as part of a global 1D array of this name
+            //  Increment the output size and return the storage size
+            size_t defineScalarVariable
+            (
+                const fileName& name
+            );
+
+            //- Define a double variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineScalarVariable
+            (
+                const char* name,
+                size_t count
+            );
+
+            //- Define a double variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineScalarVariable
+            (
+                const fileName& name,
+                size_t count
+            );
+
+            //- Define a byte-stream variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineStreamVariable
+            (
+                const char* name,
+                size_t count
+            );
+
+            //- Define a byte-stream variable with count elements
+            //  Increment the output size and return the storage size
+            size_t defineStreamVariable
+            (
+                const fileName& name,
+                size_t count
+            );
+
+            //- Define a vector (3 items) variable containing a single element
+            //  Increment the output size and return the storage size
+            size_t defineVectorVariable
+            (
+                const char* name
+            );
+
+            //- Define a vector (3 items) variable containing a single element
+            //  Increment the output size and return the storage size
+            size_t defineVectorVariable
+            (
+                const fileName& name
+            );
+
             //- Define a vector (3 items) variable with count elements
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineVectorVariable
             (
                 const char* name,
-                enum ADIOS_DATATYPES type,
                 size_t count
             );
 
             //- Define a vector (3 items) variable with count elements
-            //  Increment the output size and return the variable size
+            //  Increment the output size and return the storage size
             size_t defineVectorVariable
             (
                 const fileName& name,
-                enum ADIOS_DATATYPES type,
                 size_t count
             );
 
@@ -357,22 +402,6 @@ protected:
                 const char* attrName,
                 const fileName& varName,
                 const string& value
-            );
-
-            //- Define a bool attribute (saved as byte)
-            void defineBoolAttribute
-            (
-                const char* attrName,
-                const char* varName,
-                const bool value
-            );
-
-            //- Define a bool attribute (saved as byte)
-            void defineBoolAttribute
-            (
-                const char* attrName,
-                const fileName& varName,
-                const bool value
             );
 
             //- Define an int attribute
@@ -429,7 +458,7 @@ protected:
                 const void* value
             );
 
-            //- Write a variable
+            //- Write a variable from the list contents
             template<class T>
             void writeVariable
             (
@@ -440,7 +469,7 @@ protected:
                 writeVariable(name, list.cdata());
             }
 
-            //- Write a variable
+            //- Write a variable from the list contents
             template<class T>
             void writeVariable
             (
@@ -450,6 +479,20 @@ protected:
             {
                 writeVariable(name, list.cdata());
             }
+
+            //- Write a variable with a single integer
+            void writeIntVariable
+            (
+                const char* name,
+                const int value
+            );
+
+            //- Write a variable with a single integer
+            void writeIntVariable
+            (
+                const fileName& name,
+                const int value
+            );
 
             //- Write a variable with a single double value
             void writeScalarVariable
@@ -465,18 +508,18 @@ protected:
                 const double value
             );
 
-            //- Write a variable with a single integer
-            void writeIntVariable
+            //- Write a variable with a single vector value
+            void writeVectorVariable
             (
                 const char* name,
-                const int value
+                const vector& value
             );
 
-            //- Write a variable with a single integer
-            void writeIntVariable
+            //- Write a variable with a single vector value
+            void writeVectorVariable
             (
                 const fileName& name,
-                const int value
+                const vector& value
             );
 
 

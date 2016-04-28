@@ -43,7 +43,7 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
     meshDefineCellShapes(mesh, r);
 #endif
 
-    fileName varPath = "region" + Foam::name(r.index_) / "polyMesh";
+    fileName varPath = r.meshPath();
 
     // summary information
     defineIntVariable(varPath/"nPoints");       // polyMesh/nPoints
@@ -52,28 +52,17 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
     defineIntVariable(varPath/"nInternalFaces"); // polyMesh/nInternalFaces
 
     // polyMesh/points: 2D array (N points x 3 coordinates)
-    defineVectorVariable
-    (
-        varPath/"points",
-        adiosTraits<scalar>::adiosType,
-        mesh.nPoints()
-    );
+    defineVectorVariable(varPath/"points",  mesh.nPoints());
 
     // polyMesh/faces - save in compact form
+    // need transcription for output
     {
         const faceList& faces = mesh.faces();
 
         // indices = nFaces+1
         label count = faces.size()+1;
 
-        bufLen = defineVariable
-        (
-            varPath/"faces"/"indices",
-            adiosTraits<label>::adiosType,
-            count
-        );
-
-        // need transcription for output
+        bufLen = defineIntVariable(varPath/"faces"/"indices", count);
         maxLen = Foam::max(maxLen, bufLen);
 
         // count size for compact format
@@ -83,38 +72,22 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
             count += faces[faceI].size();
         }
 
-        bufLen = defineVariable
-        (
-            varPath/"faces"/"content",
-            adiosTraits<label>::adiosType,
-            count
-        );
+        bufLen = defineIntVariable(varPath/"faces"/"content", count);
         maxLen = Foam::max(maxLen, bufLen);
     }
 
     // polyMesh/owner - direct write
-    defineVariable
-    (
-        varPath/"owner",
-        adiosTraits<label>::adiosType,
-        mesh.faceOwner().size()
-    );
+    defineIntVariable(varPath/"owner", mesh.faceOwner().size());
 
     // polyMesh/neighbour - direct write
-    defineVariable
-    (
-        varPath/"neighbour",
-        adiosTraits<label>::adiosType,
-        mesh.faceNeighbour().size()
-    );
+    defineIntVariable(varPath/"neighbour", mesh.faceNeighbour().size());
 
     // polyMesh/boundary - byte-stream
     {
         os.rewind();
         os << mesh.boundaryMesh();
-        bufLen = os.size();
 
-        defineVariable(varPath/"boundary", adios_unsigned_byte, bufLen);
+        bufLen = defineStreamVariable(varPath/"boundary", os.size());
         maxLen = Foam::max(maxLen, bufLen);
     }
 
@@ -134,7 +107,7 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
     meshWriteCellShapes(mesh, r);
 #endif
 
-    fileName varPath = "region" + Foam::name(r.index_) / "polyMesh";
+    fileName varPath = r.meshPath();
 
     writeIntVariable(varPath/"nPoints", mesh.nPoints());
     writeIntVariable(varPath/"nCells",  mesh.nCells());
