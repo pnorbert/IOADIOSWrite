@@ -51,42 +51,32 @@ class countstreambuf
 {
     // Private data
 
-    //- The number of bytes
-    std::streamsize n_;
+        //- The number of bytes
+        std::streamsize n_;
 
 protected:
     // Protected members
 
-    //- Put character on overflow
-    //  Will normally never be called since (non-existent) buffer cannot
-    //  overflow.
-    virtual int_type overflow(int_type c)
-    {
-        ++n_;
-        return c;
-    }
+        //- Put sequence of characters
+        virtual std::streamsize xsputn(const char* s, std::streamsize num)
+        {
+            n_ += num;
+            return num;
+        }
 
 
-    //- Put sequence of characters
-    virtual std::streamsize xsputn(const char* s, std::streamsize num)
-    {
-        n_ += num;
-        return num;
-    }
-
-
-    //- Set position pointer to absolute position
-    //  For the counter, any positioning is ignored and it always acts like
-    //  seekpos(0), which resets the count.
-    virtual std::streampos seekpos
-    (
-        std::streampos sp,
-        std::ios_base::openmode which = std::ios_base::in | std::ios_base::out
-    )
-    {
-        n_ = 0;
-        return 0;
-    }
+        //- Set position pointer to absolute position
+        //  For the counter, any positioning is ignored and it always acts like
+        //  seekpos(0), which resets the count.
+        virtual std::streampos seekpos
+        (
+            std::streampos sp,
+            std::ios_base::openmode which = std::ios_base::in | std::ios_base::out
+        )
+        {
+            n_ = 0;
+            return 0;
+        }
 
 
 public:
@@ -196,7 +186,7 @@ public:
             OSstream
             (
                 *(new ocountstream()),
-                "OCountStream.sink_",
+                "OCountStream.sink",
                 format,
                 version
             )

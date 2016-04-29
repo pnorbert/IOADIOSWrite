@@ -73,7 +73,7 @@ public:
             OCompactStream
             (
                 *(new ocountstream()),
-                "OCompactCountStream.sink_",
+                "OCompactCountStream.sink",
                 format,
                 version
             )

@@ -25,7 +25,7 @@ Class
     Foam::OBufStream
 
 Description
-    A version of OStringStream that uses an externally managed buffer for
+    Similar to OStringStream but using an externally managed buffer for
     its output.
 
     This allows the output buffer to be reused and can make it easier when
@@ -35,7 +35,7 @@ Description
     should work.
 
     \code
-        DynamicCharList buffer(4096);     // allocate some large buffer
+        DynamicList<char> buffer(4096);     // allocate some large buffer
 
         {
             OBufStream os(buffer);
@@ -49,11 +49,11 @@ Description
     Although the OBufStream is quite lightweight, there may be cases
     where it is preferable to reuse the stream as well.
     \code
-        DynamicCharList buffer(4096);     // allocate some large buffer
+        DynamicList<char> buffer(4096);     // allocate some large buffer
 
         OBufStream os(buffer);
         os << "content1" << " and more content";
-        buffer.setSize(os.size());      // synchronize sizes
+        buffer.setSize(os.size());          // synchronize sizes
 
         something.write(buffer, buffer.size());
 
@@ -76,12 +76,257 @@ Description
 #define OBufStream_H
 
 #include "OStringStream.H"
-#include "DynamicCharList.H"
+#include "DynamicList.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
 {
+
+//- A streambuf class for using externally allocated memory for its buffer
+class memorybuf
+:
+    public std::streambuf
+{
+    // Private data
+
+        //- Storage location
+        char *buf_;
+
+        //- The number of bytes in the storage
+        std::streamsize len_;
+
+protected:
+    // Protected members
+
+        //- Set position pointer to relative position
+        virtual std::streampos seekoff
+        (
+            std::streamoff off,
+            std::ios_base::seekdir way,
+            std::ios_base::openmode which = std::ios_base::in | std::ios_base::out
+        )
+        {
+            const bool testin  = which & std::ios_base::in;
+            const bool testout = which & std::ios_base::out;
+
+            if (way == std::ios_base::beg)
+            {
+                if (testin)
+                {
+                    setg(eback(), eback(), egptr());
+                    gbump(off);
+                }
+                if (testout)
+                {
+                    setp(pbase(), epptr());
+                    pbump(off);
+                }
+
+                return off;
+            }
+
+            if (way == std::ios_base::cur)
+            {
+                if (testin)
+                {
+                    gbump(off);
+                }
+                if (testout)
+                {
+                    pbump(off);
+                }
+            }
+            else if (way == std::ios_base::end)
+            {
+                if (testin)
+                {
+                    gbump(off);
+                }
+                if (testout)
+                {
+                    pbump(off);
+                }
+            }
+
+            if (testin)
+            {
+                return gptr() - eback();
+            }
+            if (testout)
+            {
+                return pptr() - pbase();
+            }
+
+            return -1;
+        }
+
+
+        //- Set position pointer to absolute position
+        virtual std::streampos seekpos
+        (
+            std::streampos pos,
+            std::ios_base::openmode which = std::ios_base::in | std::ios_base::out
+        )
+        {
+            return seekoff(pos, std::ios_base::beg, which);
+        }
+
+
+        //- Get sequence of characters
+        virtual std::streamsize xsgetn(char* s, std::streamsize n)
+        {
+            std::streamsize count = 0;
+
+            // some optimization could be possible here
+            while (count < n && gptr() < egptr())
+            {
+                *(s + count++) = *(gptr());
+                gbump(1);
+            }
+
+            return count;
+        }
+
+
+        //- Put sequence of characters
+        virtual std::streamsize xsputn(const char* s, std::streamsize n)
+        {
+            std::streamsize count = 0;
+
+            // some optimization could be possible here
+            while (count < n && pptr() < epptr())
+            {
+                *(pptr()) = *(s + count++);
+                pbump(1);
+            }
+
+            return count;
+        }
+
+
+public:
+
+    // Forward declarations of adapters
+        class input;
+        class output;
+
+
+    // Constructors
+
+        //- Construct for specified buffer
+        memorybuf(char* buffer, std::streamsize num)
+        :
+            buf_(buffer),
+            len_(num)
+        {
+            setg(buf_, buf_, buf_ + len_);
+            setp(buf_, buf_ + len_);
+        }
+
+};
+
+
+//- An allocation adapter for input
+struct memorybuf::input : public memorybuf
+{
+    //- Construct with buffer and size
+    input(const char *buffer, size_t nbytes)
+    :
+        memorybuf(const_cast<char*>(buffer), nbytes)
+    {}
+
+
+    //- Construct with buffer and size
+    input(const void *buffer, size_t nbytes)
+    :
+        memorybuf
+        (
+            const_cast<char*>
+            (
+                reinterpret_cast<const char*>(buffer)
+            ),
+            nbytes
+        )
+    {}
+
+
+    //- Construct with buffer and its inherent size
+    template<class T>
+    input(const UList<T>& buffer)
+    :
+        memorybuf
+        (
+            const_cast<char*>
+            (
+                reinterpret_cast<const char*>(buffer.cdata())
+            ),
+            buffer.size() * sizeof(T)
+        )
+    {}
+
+
+    //- Construct with buffer and size
+    template<class T>
+    input(const UList<T>& buffer, label listSize)
+    :
+        memorybuf
+        (
+            const_cast<char*>
+            (
+                reinterpret_cast<const char*>(buffer.cdata())
+            ),
+            listSize * sizeof(T)
+        )
+    {}
+};
+
+
+//- An allocation adapter for output
+struct memorybuf::output : public memorybuf
+{
+    //- Construct with buffer and size
+    output(char *buffer, size_t nbytes)
+    :
+        memorybuf(buffer, nbytes)
+    {}
+
+
+    //- Construct with buffer and size
+    output(void *buffer, size_t nbytes)
+    :
+        memorybuf
+        (
+            reinterpret_cast<char*>(buffer),
+            nbytes
+        )
+    {}
+
+
+    //- Construct with buffer and its inherent size
+    template<class T>
+    output(UList<T>& buffer)
+    :
+        memorybuf
+        (
+            reinterpret_cast<char*>(buffer.data()),
+            buffer.size() * sizeof(T)
+        )
+    {}
+
+
+    //- Construct with buffer and size
+    template<class T>
+    output(UList<T>& buffer, label listSize)
+    :
+        memorybuf
+        (
+            reinterpret_cast<char*>(buffer.data()),
+            listSize * sizeof(T)
+        )
+    {}
+};
+
 
 /*---------------------------------------------------------------------------*\
                      Class OBufStreamAllocator Declaration
@@ -94,38 +339,52 @@ private:
 
     // Private data
 
-        //- Reference to the underlying character buffer
-        UList<char>& buf_;
+        //- Reference to the underlying buffer
+        memorybuf::output buf_;
 
 protected:
 
     // Protected data
 
         //- The stream pointer
-        ostream* strPtr_;
+        std::ostream* strPtr_;
 
 public:
 
     // Constructors
 
-        //- Construct with buffer
-        OBufStreamAllocator(const UList<char>& buffer)
+        //- Construct with buffer and number of bytes
+        OBufStreamAllocator(char *buffer, size_t nbytes)
         :
-            buf_(const_cast<UList<char>&>(buffer)),
-            strPtr_(new std::ostringstream())
-        {
-            strPtr_->rdbuf()->pubsetbuf(buf_.data(), buf_.size());
-        }
+            buf_(buffer, nbytes),
+            strPtr_(new std::ostream(&buf_))
+        {}
+
+
+        //- Construct with buffer and number of bytes
+        OBufStreamAllocator(void *buffer, size_t nbytes)
+        :
+            buf_(buffer, nbytes),
+            strPtr_(new std::ostream(&buf_))
+        {}
+
+
+        //- Construct using specified buffer and its inherent storage size
+        template<class T>
+        OBufStreamAllocator(UList<T>& buffer)
+        :
+            buf_(buffer),
+            strPtr_(new std::ostream(&buf_))
+        {}
 
 
         //- Construct with buffer and size
-        OBufStreamAllocator(const UList<char>& buffer, label listSize)
+        template<class T>
+        OBufStreamAllocator(UList<T>& buffer, label listSize)
         :
-            buf_(const_cast<UList<char>&>(buffer)),
-            strPtr_(new std::ostringstream())
-        {
-            strPtr_->rdbuf()->pubsetbuf(buf_.data(), listSize);
-        }
+            buf_(buffer, listSize),
+            strPtr_(new std::ostream(&buf_))
+        {}
 
 
     //- Destructor
@@ -135,20 +394,21 @@ public:
     }
 
 
-    //- Return the current output position in the buffer
-    //  Providing that the external buffer is large enough that overflow does
-    //  not occur, this should correspond to the number of bytes output.
-    std::streampos size()
-    {
-        return strPtr_->tellp();
-    }
+    // Member functions
+
+        //- Return the current output position in the buffer
+        std::streampos size()
+        {
+            return strPtr_->tellp();
+        }
 
 
-    //- Rewind the output buffer
-    void rewind()
-    {
-        strPtr_->rdbuf()->pubseekpos(0);
-    }
+        //- Move to buffer start, clear errors
+        void rewind()
+        {
+            strPtr_->rdbuf()->pubseekpos(0);
+            strPtr_->clear(); // for safety, clear any old errors
+        }
 
 };
 
@@ -157,11 +417,7 @@ public:
                          Class OBufStream Declaration
 \*---------------------------------------------------------------------------*/
 
-//- A std::ostream with an attached external buffer
-//
-//  Providing that the external buffer is large enough that no overflow occurs,
-//  it should be possible to determine the number of bytes output by querying
-//  the output position in the buffer.
+//- An OSstream with an attached external buffer
 class OBufStream
 :
     private OBufStreamAllocator,
@@ -171,10 +427,52 @@ public:
 
     // Constructors
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and number of bytes
         OBufStream
         (
-            const UList<char>& buffer,
+            char* buffer,
+            size_t nbytes,
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
+        )
+        :
+            OBufStreamAllocator(buffer, nbytes),
+            OSstream
+            (
+                *strPtr_,
+                "OBufStream.sink",
+                format,
+                version
+            )
+        {}
+
+
+        //- Construct using data area from buffer and number of bytes
+        template<class T>
+        OBufStream
+        (
+            UList<T>& buffer,
+            size_t nbytes,
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
+        )
+        :
+            OBufStreamAllocator(buffer.data(), nbytes),
+            OSstream
+            (
+                *strPtr_,
+                "OBufStream.sink",
+                format,
+                version
+            )
+        {}
+
+
+        //- Construct using specified buffer and its inherent storage size
+        template<class T>
+        OBufStream
+        (
+            UList<T>& buffer,
             streamFormat format=ASCII,
             versionNumber version=currentVersion
         )
@@ -183,17 +481,18 @@ public:
             OSstream
             (
                 *strPtr_,
-                "OStringStream.sinkFile", // keep same name as string-stream
+                "OBufStream.sink",
                 format,
                 version
             )
         {}
 
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and its storage capacity
+        template<class T>
         OBufStream
         (
-            const DynamicCharList& buffer,
+            DynamicList<T>& buffer,
             streamFormat format=ASCII,
             versionNumber version=currentVersion
         )
@@ -202,7 +501,7 @@ public:
             OSstream
             (
                 *strPtr_,
-                "OStringStream.sinkFile", // keep same name as string-stream
+                "OBufStream.sink",
                 format,
                 version
             )
@@ -216,13 +515,17 @@ public:
 
     // Member functions
 
-    //- Return the current output position in the buffer
-    //  Providing that the external buffer is large enough that overflow does
-    //  not occur, this should correspond to the number of bytes output.
-    using OBufStreamAllocator::size;
+        //- Return the current output position in the buffer
+        using OBufStreamAllocator::size;
 
-    //- Rewind the output buffer
-    using OBufStreamAllocator::rewind;
+        //- Rewind the stream, clearing any old errors
+        Ostream& rewind()
+        {
+            OBufStreamAllocator::rewind();
+            setGood();  // resynchronize with internal state
+
+            return *this;
+        }
 
 };
 

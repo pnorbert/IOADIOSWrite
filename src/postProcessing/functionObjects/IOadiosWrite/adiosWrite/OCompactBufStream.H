@@ -25,7 +25,7 @@ Class
     Foam::OCompactBufStream
 
 Description
-    A version of OStringStream that uses an externally managed buffer for
+    Similar to OStringStream but using an externally managed buffer for
     its output and using a more compact output (fewer spaces)
 
 \*---------------------------------------------------------------------------*/
@@ -45,6 +45,7 @@ namespace Foam
                       Class OCompactBufStream Declaration
 \*---------------------------------------------------------------------------*/
 
+//- An OSstream with an attached external buffer and compact output
 class OCompactBufStream
 :
     private OBufStreamAllocator,
@@ -54,10 +55,52 @@ public:
 
     // Constructors
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and number of bytes
         OCompactBufStream
         (
-            const UList<char>& buffer,
+            char* buffer,
+            size_t nbytes,
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
+        )
+        :
+            OBufStreamAllocator(buffer, nbytes),
+            OCompactStream
+            (
+                *strPtr_,
+                "OBufStream.sink",
+                format,
+                version
+            )
+        {}
+
+
+        //- Construct using data area from buffer and number of bytes
+        template<class T>
+        OCompactBufStream
+        (
+            UList<T>& buffer,
+            size_t nbytes,
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
+        )
+        :
+            OBufStreamAllocator(buffer.data(), nbytes),
+            OCompactStream
+            (
+                *strPtr_,
+                "OBufStream.sink",
+                format,
+                version
+            )
+        {}
+
+
+        //- Construct using specified buffer and its inherent storage size
+        template<class T>
+        OCompactBufStream
+        (
+            UList<T>& buffer,
             streamFormat format=ASCII,
             versionNumber version=currentVersion
         )
@@ -66,17 +109,18 @@ public:
             OCompactStream
             (
                 *strPtr_,
-                "OStringStream.sinkFile", // keep same name as string-stream
+                "OBufStream.sink",
                 format,
                 version
             )
         {}
 
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and its storage capacity
+        template<class T>
         OCompactBufStream
         (
-            const DynamicCharList& buffer,
+            DynamicList<T>& buffer,
             streamFormat format=ASCII,
             versionNumber version=currentVersion
         )
@@ -85,7 +129,7 @@ public:
             OCompactStream
             (
                 *strPtr_,
-                "OStringStream.sinkFile", // keep same name as string-stream
+                "OBufStream.sink",
                 format,
                 version
             )
@@ -97,13 +141,13 @@ public:
     {}
 
 
-    //- Return the current output position in the buffer
-    //  Providing that the external buffer is large enough that overflow does
-    //  not occur, this should correspond to the number of bytes output.
-    using OBufStreamAllocator::size;
+    // Member functions
 
-    //- Rewind the output buffer
-    using OBufStreamAllocator::rewind;
+        //- Return the current output position in the buffer
+        using OBufStreamAllocator::size;
+
+        //- Rewind the output buffer
+        using OBufStreamAllocator::rewind;
 
 };
 
@@ -112,9 +156,8 @@ public:
                         Class ORawBufStream Declaration
 \*---------------------------------------------------------------------------*/
 
-//- A version of OStringStream that uses an externally managed buffer for
-//  its output and using a more compact output (fewer spaces) and raw
-//  binary output
+//- An OSstream with an attached external buffer using a more compact output
+//  (fewer spaces) and raw binary output
 class ORawBufStream
 :
     public OCompactBufStream
@@ -123,10 +166,42 @@ public:
 
     // Constructors
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and number of bytes
         ORawBufStream
         (
-            const UList<char>& buffer,
+            char* buffer,
+            size_t nbytes,
+            streamFormat format=BINARY,
+            versionNumber version=currentVersion
+        )
+        :
+            OCompactBufStream(buffer, nbytes, format, version)
+        {
+            raw(true);
+        }
+
+
+        //- Construct using data area from buffer and number of bytes
+        template<class T>
+        ORawBufStream
+        (
+            UList<T>& buffer,
+            size_t nbytes,
+            streamFormat format=BINARY,
+            versionNumber version=currentVersion
+        )
+        :
+            OCompactBufStream(buffer, nbytes, format, version)
+        {
+            raw(true);
+        }
+
+
+        //- Construct using specified buffer and its inherent storage size
+        template<class T>
+        ORawBufStream
+        (
+            UList<T>& buffer,
             streamFormat format=BINARY,
             versionNumber version=currentVersion
         )
@@ -137,10 +212,11 @@ public:
         }
 
 
-        //- Construct using specified buffer for the output
+        //- Construct using specified buffer and its storage capacity
+        template<class T>
         ORawBufStream
         (
-            const DynamicCharList& buffer,
+            DynamicList<T>& buffer,
             streamFormat format=BINARY,
             versionNumber version=currentVersion
         )
@@ -149,6 +225,7 @@ public:
         {
             raw(true);
         }
+
 };
 
 
