@@ -239,7 +239,15 @@ Foam::adiosWrite::adiosWrite
     primaryMesh_(refCast<const fvMesh>(obr)),
     time_(primaryMesh_.time())
 {
-    Info<< "adiosWrite constructor called " << endl;
+    Info<< "adiosWrite constructor called (" << Pstream::nProcs()
+        << " procs)" << endl;
+
+    if (Pstream::nProcs() == 1)
+    {
+        // is serial - must do MPI_Init() ourselves
+        MPI_Init(NULL, NULL);  // NULL args are OK for openmpi, mpich-2
+    }
+
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_);
 
 
@@ -281,6 +289,14 @@ Foam::adiosWrite::~adiosWrite()
     adios_finalize(Pstream::myProcNo());
 
     deleteDemandDrivenData(shapeLookupPtr_);
+
+    MPI_Comm_free(&comm_);
+
+    if (Pstream::nProcs() == 1)
+    {
+        // is serial - must do MPI_Finalize() ourselves
+        MPI_Finalize();
+    }
 }
 
 
