@@ -35,6 +35,24 @@ License
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
+namespace Foam
+{
+    template<>
+    const char* Foam::NamedEnum
+    <
+        Foam::adiosCore::readType,
+        2
+    >::names[] =
+    {
+        "BP",
+        "BP_AGGREGATE"
+    };
+}
+
+
+const Foam::NamedEnum<Foam::adiosCore::readType, 2>
+Foam::adiosCore::readMethod;
+
 const Foam::word
 Foam::adiosCore::dataDirectory("adiosData");
 

@@ -169,6 +169,8 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     defineIntVariable("nregions");      // number of regions
     defineIntVariable("time/index");
     defineScalarVariable("time/value");
+    defineScalarVariable("time/deltaT");
+    defineScalarVariable("time/deltaT0");
 
     forAll(regions_, regionI)
     {
@@ -270,7 +272,7 @@ Foam::adiosWrite::adiosWrite
         groupID_,
         adiosMethod_.c_str(),
         methodParams_.c_str(),
-        ""
+        ""  // base-path (unused) needs empty string, not a NULL pointer
     );
 
     // Write initial conditions (including mesh) if restartTime not set
@@ -543,6 +545,8 @@ void Foam::adiosWrite::write()
         writeIntVariable("nregions", regions_.size());
         writeIntVariable("time/index",    time_.timeIndex());
         writeScalarVariable("time/value", time_.timeOutputValue());
+        writeScalarVariable("time/deltaT", time_.deltaT().value());
+        writeScalarVariable("time/deltaT0", time_.deltaT0().value());
 
         forAll(regions_, regionI)
         {

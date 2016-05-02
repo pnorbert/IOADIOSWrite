@@ -39,6 +39,7 @@ SourceFiles
 #include "word.H"
 #include "instantList.H"
 #include "IOstreams.H"
+#include "NamedEnum.H"
 
 #include "IBufStream.H"
 #include "OBufStream.H"
@@ -55,12 +56,29 @@ SourceFiles
 namespace Foam
 {
 
+// Forward declarations
+class adiosCore;
+
 /*---------------------------------------------------------------------------*\
                           Class adiosCore Declaration
 \*---------------------------------------------------------------------------*/
 
 class adiosCore
 {
+public:
+
+    //- Adios read methods. Values as per adios_read.h
+    enum readType
+    {
+        READ_BP = 0,            //!< ADIOS_READ_METHOD_BP (=0)
+        READ_BP_AGGREGATE = 1   //!< ADIOS_READ_METHOD_BP_AGGREGATE (=1)
+    };
+
+
+    // Static data
+
+        static const NamedEnum<readType, 2> readMethod;
+
 private:
 
     // Private data
