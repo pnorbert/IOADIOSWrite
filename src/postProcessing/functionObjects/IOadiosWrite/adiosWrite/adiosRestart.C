@@ -122,102 +122,11 @@ bool Foam::adiosWrite::fieldRead
     );
 }
 
-
 // processor0/0.004/uniform/lagrangian/kinematicCloud/cloudProperties <stream>   - same for all processors
 // processor0/0.004/uniform/lagrangian/kinematicCloud/kinematicCloudOutputProperties <stream>    - same for all processors
 
 // processor0/0.004/lagrangian/kinematicCloud/
 // processor0/0.004/lagrangian/kinematicCloud/{U, age, active, angularMom} ...
-
-/// bool Foam::adiosWrite::readScalarFields(adiosReader::helper& helper, label regionID)
-/// {
-///     bool ok = true;
-///
-///     const regionInfo& rInfo = regions_[regionID];
-///
-///     const fieldGroup<scalar>& fields(rInfo.scalarFields_);
-///     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
-///
-///     forAll(fields, fieldI)
-///     {
-///         // Lookup field
-///         volScalarField& field =
-///             const_cast<volScalarField&>
-///             (
-///                 mesh.lookupObject<volScalarField>(fields[fieldI])
-///             );
-///
-///         Info<< "    readScalarField: " << field.name() << endl;
-///
-///         fileName datasetName
-///         (
-///             "region" + Foam::name(regionID)/
-///             "fields"/
-///             fields[fieldI]
-///         );
-///
-///         {
-///             // Read into a plain continuous array for the data
-///             ioScalar data[field.size()];
-///
-///             // Read data from file
-///             ok = helper.getDataSet(datasetName, &data);
-///             if (ok)
-///             {
-///                 field.internalField() = UList<ioScalar>(&data[0], field.size());
-///             }
-///             else
-///             {
-///                 break;
-///             }
-///         }
-///
-///         forAll(field.boundaryField(), patchI)
-///         {
-///             const fvPatchScalarField& psf = field.boundaryField()[patchI];
-///
-///             {
-///                 Info<< "      patchfield " << patchI
-///                     << ": name=" << psf.patch().name()
-///                     << ": type=" << psf.type()
-///                     << " empty=" << psf.empty()
-///                     << " size=" << psf.size()
-///                     << endl;
-///             }
-///
-///             if (!isA<emptyFvPatchField<scalar> >(psf))
-///             {
-///                 continue;
-///             }
-///
-///             ioScalar data[psf.size()];
-///
-///             ok = helper.getDataSet
-///             (
-///                 // FIXME: what's the name of psf in the output?
-///                 datasetName/"patch" + Foam::name(patchI),
-///                 &data
-///             );
-///
-///             // Take reference to scalarField so that we can use = operator
-///             // with UList, over-writing fixedValue if present
-///             // Note: == operator not available for assignment from UList
-///             scalarField& sf = field.boundaryField()[patchI];
-///             if (ok)
-///             {
-///                 sf = UList<ioScalar>(&data[0], sf.size());
-///             }
-///             else
-///             {
-///                 break;
-///             }
-///         }
-///
-///         if (!ok) break;
-///     }
-///
-///     return ok;
-/// }
 
 
 bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo)
@@ -231,8 +140,8 @@ bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo
 
         const kinematicCloud& constCloud =
             mesh.lookupObject<kinematicCloud>(rInfo.cloudNames_[cloudI]);
-        kinematicCloud& cloud = const_cast<kinematicCloud&>(constCloud);
 
+        kinematicCloud& cloud = const_cast<kinematicCloud&>(constCloud);
 
         //basicKinematicCloud *q =(basicKinematicCloud*) &cloud;
         basicKinematicCloud *q = reinterpret_cast<basicKinematicCloud*>(&cloud);

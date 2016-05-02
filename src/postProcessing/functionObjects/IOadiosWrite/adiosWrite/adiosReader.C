@@ -152,6 +152,16 @@ size_t Foam::adiosReader::helper::sizeOf
             return 0;
         }
 
+        if (varInfo->type == adios_string)
+        {
+            WarningInFunction
+                << "Reading sizes for adios_string variables incomplete: " << datasetName
+                << " from adios file: "
+                << endl;
+
+            return 0;
+        }
+
         if (varInfo->ndim > 0)
         {
             int nblocks = varInfo->sum_nblocks;
@@ -206,11 +216,10 @@ size_t Foam::adiosReader::helper::sizeOf
         else
         {
             // Pout<< " variable=" << datasetName << " is scalar" << endl;
-
             bytes = 1; // scalar value
         }
 
-        bytes *= adios_type_size(varInfo->type, const_cast<char*>(""));
+        bytes *= adios_type_size(varInfo->type, NULL);
 
         if (verbose)
         {

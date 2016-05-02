@@ -62,26 +62,13 @@ bool Foam::adiosWrite::fieldRead
         {
             // read fields via dictionary
             IBufStream is(helper.buffer, adiosCore::strFormat);
+            dictionary dict(is);
 
-            OFstream os("proc" + Foam::name(Pstream::myProcNo()) + "-" + field.name());
-            char c;
-            size_t count = 0;
-            while (is.good() && !is.eof())
-            {
-                is.get(c);
-                os << c;
-                ++count;
-            }
-            os << endl;
-            os << "count=" << count << endl;
-            os << "nbytes=" << helper.buffer.size() << endl;
+            Pout<<"dictionary: " << field.name() << " with "
+                << dict.toc() << " boundaryField: "
+                << dict.subDict("boundaryField").toc() << endl;
 
-            IBufStream is2(helper.buffer, adiosCore::strFormat);
-            dictionary dict(is2);
-            dict.write(os, false);
-
-            Info<<"dictionary: " << dict << endl;
-
+            // could also verify dimensions
             field.readField(dict, "internalField");
             field.boundaryField().readField(field, dict.subDict("boundaryField"));
 

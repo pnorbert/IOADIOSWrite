@@ -208,6 +208,7 @@ protected:
 public:
 
     // Forward declarations of adapters
+
         class input;
         class output;
 

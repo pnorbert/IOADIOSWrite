@@ -242,7 +242,8 @@ Foam::adiosWrite::adiosWrite
     Info<< "adiosWrite constructor called " << endl;
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_);
 
-    // Initilize ADIOS
+
+    // Initialize ADIOS
     adios_init_noxml(comm_);
 
     // Create a group to hold all variable definitions
@@ -263,7 +264,6 @@ Foam::adiosWrite::adiosWrite
         methodParams_.c_str(),
         ""
     );
-    adios_allocate_buffer(ADIOS_BUFFER_ALLOC_NOW, 10);
 
     // Write initial conditions (including mesh) if restartTime not set
     if (restartTime_ == VGREAT)
@@ -355,7 +355,6 @@ void Foam::adiosWrite::read(const dictionary& dict)
         Info<< "  Restart time requested " << restartTime_ << endl;
     }
 
-
     // Check if writeInterval is a positive number
     if (writeInterval_ <= 0)
     {
@@ -401,12 +400,12 @@ void Foam::adiosWrite::execute()
         const label timeIndex = Time::findClosestTimeIndex(times, restartTime_);
         time.setTime(times[timeIndex], timeIndex);
 
-        Info<<"times: " << times << endl;
+        // Info<<"times: " << times << endl;
+        // Info<<"look for times in " << dataDirectory << endl;
 
-        Info<<"look for times in " << dataDirectory << endl;
         const instantList adiosTimes = adiosCore::findTimes();
 
-        Info<<"adios-times: " << adiosTimes << endl;
+        // Info<<"adios-times: " << adiosTimes << endl;
         const label adiosTimeIndex = Time::findClosestTimeIndex(adiosTimes, restartTime_);
         if (adiosTimeIndex < 0)
         {

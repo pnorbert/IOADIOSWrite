@@ -71,6 +71,7 @@ public:
         ADIOS_SELECTION *selection;
         size_t maxLen;
 
+
         helper(const DynamicCharList&);
 
         ~helper();
