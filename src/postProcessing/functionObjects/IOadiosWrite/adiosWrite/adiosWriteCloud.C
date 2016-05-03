@@ -48,8 +48,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
     size_t bufLen = 0;
     size_t maxLen = 0;
 
-    Info<< "  adiosWrite::cloudDefine: region "
-        << r.index_ << " " << r.name_ << ": " << endl;
+    Info<< "  adiosWrite::cloudDefine: " << r.info() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
@@ -287,8 +286,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 {
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-    Info<< "  adiosWrite::cloudWrite: region "
-        << r.index_ << " " << r.name_ << ": " << endl;
+    Info<< "  adiosWrite::cloudWrite: " << r.info() << endl;
 
 #ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
     cloudWriteExplicit(r);
@@ -444,8 +442,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 size_t Foam::adiosWrite::cloudDefineExplicit(regionInfo& r)
 {
 #ifdef FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
-    Info<< "  adiosWrite::cloudDefineExplicit: region "
-        << r.index_ << " " << r.name_ << ": " << endl;
+    Info<< "  adiosWrite::cloudDefineExplicit: " << r.info() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
@@ -547,8 +544,7 @@ void Foam::adiosWrite::cloudWriteExplicit(const regionInfo& r)
     DynamicList<scalar> scalarBuffer;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-    Info<< "  adiosWrite::cloudWriteExplicit: region "
-        << r.index_ << " " << r.name_ << ": " << endl;
+    Info<< "  adiosWrite::cloudWriteExplicit: " << r.info() << endl;
 
     forAll(r.cloudNames_, cloudI)
     {

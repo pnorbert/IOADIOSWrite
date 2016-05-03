@@ -25,6 +25,7 @@ License
 
 #include "adiosWrite.H"
 #include "dictionary.H"
+#include "HashSet.H"
 #include "scalar.H"
 #include "demandDrivenData.H"
 
@@ -42,40 +43,57 @@ namespace Foam
 }
 
 
-void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
+void Foam::adiosWrite::regionInfo::read
+(
+    const fvMesh& mesh,
+    const dictionary& dict,
+    const dictionary& topDict
+)
 {
-    Info<< " Region dict: " << rInfo.name_ << endl;
-    wordList toc(dict.toc());
-    forAll(toc, j)
+    Info<< " Region dict: " << name_ << " (mesh " << mesh.name() << ")" << endl;
+
+    if (!topDict.empty())
     {
-        Info<< "   TOC " << j << ": " << toc[j] << endl;
+        getAutoWrite(topDict); // check for auto-write
     }
-    Info<< endl;
-    dict.lookup("objectNames")  >> rInfo.objectNames_;
-    dict.lookup("cloudNames")   >> rInfo.cloudNames_;
-    dict.lookup("cloudAttribs") >> rInfo.cloudAttribs_;
+
+    getAutoWrite(dict);  // check again for auto-write
+
+    wordList toc(dict.toc());
+
+    if (dict.found("objectNames") || !autoWrite_)
+    {
+        dict.lookup("objectNames") >> objectNames_;
+    }
+    if (dict.found("cloudNames") || !autoWrite_)
+    {
+        dict.lookup("cloudNames") >> cloudNames_;
+    }
+    if (dict.found("cloudAttribs") || !autoWrite_)
+    {
+        dict.lookup("cloudAttribs") >> cloudAttribs_;
+    }
 
 #ifdef FOAM_ADIOS_CELL_SHAPES
     // Set length of cell data size array
-    rInfo.cellDataSizes_.setSize(Pstream::nProcs());
+    cellDataSizes_.setSize(Pstream::nProcs());
 #endif
 
     // Set length of particle numbers array
-    rInfo.nParticles_.setSize(Pstream::nProcs());
+    nParticles_.setSize(Pstream::nProcs());
 
     // Do a basic check to see if the objectNames_ is accessible
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
-    DynamicList<word> missingObjects(rInfo.objectNames_.size());
-    forAll(rInfo.objectNames_, i)
+    DynamicList<word> missingObjects(objectNames_.size());
+    forAll(objectNames_, i)
     {
-        if (mesh.foundObject<regIOobject>(rInfo.objectNames_[i]))
+        if (mesh.foundObject<regIOobject>(objectNames_[i]))
         {
-            Info<< " " << rInfo.objectNames_[i];
+            Info<< " " << objectNames_[i];
         }
         else
         {
-            missingObjects.append(rInfo.objectNames_[i]);
+            missingObjects.append(objectNames_[i]);
         }
     }
 
@@ -88,9 +106,9 @@ void Foam::adiosWrite::read_region(const dictionary& dict, regionInfo& rInfo)
     }
 
     // Also print the cloud names
-    forAll(rInfo.cloudNames_, i)
+    forAll(cloudNames_, i)
     {
-        Info<< " " << rInfo.cloudNames_[i];
+        Info<< " " << cloudNames_[i];
     }
     Info<< nl << endl;
 }
@@ -242,7 +260,7 @@ Foam::adiosWrite::adiosWrite
     time_(primaryMesh_.time())
 {
     Info<< "adiosWrite constructor called (" << Pstream::nProcs()
-        << " procs)" << endl;
+        << " procs) with primary mesh " << primaryMesh_.name() << endl;
 
     if (Pstream::nProcs() == 1)
     {
@@ -251,7 +269,6 @@ Foam::adiosWrite::adiosWrite
     }
 
     MPI_Comm_dup(MPI_COMM_WORLD, &comm_);
-
 
     // Initialize ADIOS
     adios_init_noxml(comm_);
@@ -270,8 +287,8 @@ Foam::adiosWrite::adiosWrite
     adios_select_method
     (
         groupID_,
-        adiosMethod_.c_str(),
-        methodParams_.c_str(),
+        writeMethod_.c_str(),
+        writeParams_.c_str(),
         ""  // base-path (unused) needs empty string, not a NULL pointer
     );
 
@@ -306,23 +323,40 @@ Foam::adiosWrite::~adiosWrite()
 
 void Foam::adiosWrite::read(const dictionary& dict)
 {
-    wordList toc_ (dict.toc());
-    forAll(toc_, i)
-    {
-        Info<< " TOC "<< i<<": " << toc_[i] << endl;
-    }
-    Info<< endl << endl;
+    // wordList toc_(dict.toc());
+    // forAll(toc_, i)
+    // {
+    //     Info<< " TOC "<< i<<": " << toc_[i] << endl;
+    // }
+    // Info<< endl << endl;
+
+
+    // test with auto-write
+    Switch autoWrite = true;
+    autoWrite.readIfPresent("autoWrite", dict); // top-level auto-write?
+
+    // all known regions
+    wordHashSet regionNames(time_.names<fvMesh>());
+    // Info<< "Known regions: " << regionNames << endl;
 
     // Get the list of regions in adiosDict (as name list and dictionary list)
     const entry* entryPtr = dict.lookupEntryPtr("regions", false, false);
 
+    label nRegion = 0;
     if (entryPtr->isDict())
     {
         // Regions dictionary
         const dictionary& allRegionsDict = entryPtr->dict();
 
-        label nRegion = 0;
-        regions_.setSize(allRegionsDict.toc().size());
+        regions_.setSize
+        (
+            Foam::max
+            (
+                regionNames.size(),
+                allRegionsDict.toc().size()
+            )
+        );
+
         forAllConstIter(dictionary, allRegionsDict, iter)
         {
             if (!iter().isDict())
@@ -334,27 +368,92 @@ void Foam::adiosWrite::read(const dictionary& dict)
             }
 
             const dictionary& regionDict = iter().dict();
-            regions_[nRegion].index_ = nRegion;
-            regions_[nRegion].name_  = iter().keyword();
+            const word& regName = iter().keyword();
 
-            // Process each region, which should contain the fields and particles
-            read_region(regionDict, regions_[nRegion]);
-            ++nRegion;
+            if (regionDict.lookupOrDefault<Switch>("active", true))
+            {
+                if (time_.foundObject<fvMesh>(regName))
+                {
+                    regions_[nRegion].index_ = nRegion;
+                    regions_[nRegion].name_  = regName;
+
+                    regions_[nRegion].read
+                    (
+                        time_.lookupObject<fvMesh>(regName),
+                        regionDict,
+                        dict
+                    );
+
+                    Info<< regions_[nRegion].info() << endl;
+
+                    ++nRegion;
+                }
+                else
+                {
+                    Info<<"no such region: " << regName << endl;
+                }
+            }
+
+            // remove as treated
+            regionNames.erase(regName);
         }
     }
-    else
+    else if (autoWrite)
+    {
+        regions_.setSize(regionNames.size());
+    }
+    else if (!autoWrite)
     {
         FatalIOErrorInFunction(dict)
             << "regions must be specified in dictionary format"
             << exit(FatalIOError);
     }
 
-    // Lookup in dictionary
-    writeInterval_ = dict.lookupOrDefault<label>("writeInterval", 1);
+    if (autoWrite)
+    {
+        // primary mesh first
+        word regName = primaryMesh_.name();
+        if (regionNames.found(regName))
+        {
+            regions_[nRegion].index_     = nRegion;
+            regions_[nRegion].name_      = regName;
+            regions_[nRegion].autoWrite_ = true;
+            ++nRegion;
 
-    // Lookup chunk size if present
-    adiosMethod_  = dict.lookupOrDefault<word>("adiosMethod", "MPI");
-    methodParams_ = dict.lookupOrDefault<string>("methodparams", "");
+            // remove as treated
+            regionNames.erase(regName);
+        }
+
+        wordList regNames = regionNames.sortedToc();
+        forAll(regNames, regI)
+        {
+            const word& regName = regNames[regI];
+
+            if (time_.foundObject<fvMesh>(regName))
+            {
+                // this lookup cannot actually fail
+                regions_[nRegion].index_     = nRegion;
+                regions_[nRegion].name_      = regName;
+                regions_[nRegion].autoWrite_ = true;
+                ++nRegion;
+            }
+        }
+    }
+
+    regions_.setSize(nRegion);
+
+    // Default values prior to lookup in dictionary
+    readMethod_  = "BP";
+    writeMethod_ = "MPI";
+    writeParams_ = "";
+
+    dict.readIfPresent("readMethod",  readMethod_);
+    dict.readIfPresent("adiosMethod", writeMethod_);  // old name
+    dict.readIfPresent("writeMethod", writeMethod_);
+    dict.readIfPresent("methodparams", writeParams_); // old name
+    dict.readIfPresent("writeOptions", writeParams_);
+
+    writeInterval_ = dict.lookupOrDefault<label>("writeInterval", 1);
 
     // Print info to terminal
     Info<< type() << " " << name() << ":" << endl
@@ -382,10 +481,10 @@ void Foam::adiosWrite::read(const dictionary& dict)
             << exit(FatalIOError);
     }
 
-    Info<< type() << " " << name() << ":" << endl
-        << "  ADIOS output method: " << adiosMethod_ << endl
-        << "      with parameters: " << methodParams_ << endl
-        << "       write interval: " << writeInterval_ << endl;
+    Info<< type() << " " << name() << ":" << nl
+        << "  ADIOS write method: " << writeMethod_ << nl
+        << "     with parameters: " << writeParams_ << nl
+        << "      write interval: " << writeInterval_ << endl;
 }
 
 

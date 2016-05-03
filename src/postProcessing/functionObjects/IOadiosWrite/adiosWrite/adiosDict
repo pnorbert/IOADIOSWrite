@@ -1,0 +1,104 @@
+DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT
+
+          THE CONTENTS OF THIS FILE ARE NOT YET BEING USED
+
+DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT
+
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    note        "control parameters for adios";
+    object      adiosDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Input read method:
+//  = BP               (default)
+//  = BP_AGGREGATE
+readMethod      BP;
+
+// Output write method: 'adios_config -m' to see available methods
+// = MPI               (default)
+// = MPI_AGGREGATE
+// = POSIX
+writeMethod     MPI;
+
+// Parameters for the selected write method
+// = ""               (default)
+// = "verbose=4;num_aggregators=2;num_ost=2" ...
+writeOptions    "";
+
+// Library to load
+libs            ( "libAdiosIo.so" );
+
+// Automatically select all volume fields that have AUTO_WRITE on
+autoWrite       true;
+
+// Items to write or (when auto-write is used) additonal items to write
+select
+{
+    // Volume fields
+    fields          ();
+
+    // Kinematic clouds
+    clouds          ();
+
+    // Additional write attributes for clouds. Valid choices:
+    // - Us             = Slip velocity Us = U - Uc
+    cloudAttribs    ();
+}
+
+
+// Items to suppress writing
+ignore
+{
+    fields  ( );
+    clouds  ( referredParticleCloud );
+    regions ( );
+}
+
+
+// Per-region specification.
+// Mandatory if autoWrite is off.
+regions
+{
+    region0
+    {
+        active          true;
+        autoWrite       true;
+        select
+        {
+            fields      ();
+            clouds      ();
+            cloudAttribs();
+        }
+        ignore
+        {
+            fields      ();
+            clouds      ();
+            cloudAttribs();
+        }
+    }
+
+    region1
+    {
+        active          true;
+        fields          ();
+        clouds          ();
+        cloudAttribs    ();
+    }
+
+}
+
+
+// ************************************************************************* //

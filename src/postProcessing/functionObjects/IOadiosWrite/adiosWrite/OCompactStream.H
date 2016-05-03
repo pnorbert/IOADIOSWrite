@@ -25,7 +25,7 @@ Class
     Foam::OCompactStream
 
 Description
-    A generic output stream using an output with reduced spaces
+    A generic output stream using an output with reduced spaces.
 
 SourceFiles
     OCompactStream.C

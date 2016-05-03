@@ -25,10 +25,7 @@ Class
     Foam::OCompactStringStream
 
 Description
-    Output to memory buffer stream using an output with reduced spaces
-
-SourceFiles
-    StringStreamsPrint.C
+    Output to memory buffer stream using an output with reduced spaces.
 
 \*---------------------------------------------------------------------------*/
 

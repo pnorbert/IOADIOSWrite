@@ -24,47 +24,70 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosWrite.H"
+#include "nullObject.H"
+
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 
-Foam::label Foam::adiosWrite::appendFieldGroup
+bool Foam::adiosWrite::supportedFieldType
 (
-    regionInfo& r,
+    const word& fieldType
+)
+{
+    if (isNull(fieldType) || fieldType.empty())
+    {
+        return false;
+    }
+
+    return
+    (
+        fieldType == volScalarField::typeName
+     || fieldType == volVectorField::typeName
+     || fieldType == surfaceScalarField::typeName
+     // || fieldType == volSphericalTensorField::typeName
+     // || fieldType == volSymmTensorField::typeName
+     // || fieldType == volTensorField::typeName
+    );
+}
+
+
+Foam::label Foam::adiosWrite::regionInfo::appendFieldGroup
+(
     const word& fieldName,
     const word& fieldType
 )
 {
     if (fieldType == volScalarField::typeName)
     {
-        r.scalarFields_.append(fieldName);
+        scalarFields_.append(fieldName);
         return 1;
     }
     else if (fieldType == volVectorField::typeName)
     {
-        r.vectorFields_.append(fieldName);
+        vectorFields_.append(fieldName);
         return 1;
     }
     else if (fieldType == surfaceScalarField::typeName)
     {
-        r.surfaceScalarFields_.append(fieldName);
+        surfaceScalarFields_.append(fieldName);
         return 1;
     }
     /*
     else if (fieldType == volSphericalTensorField::typeName)
     {
-        //r.sphericalTensorFields_.append(fieldName);
-        return 0;
+        sphericalTensorFields_.append(fieldName);
+        return 1;
     }
     else if (fieldType == volSymmTensorField::typeName)
     {
-        //r.symmTensorFields_.append(fieldName);
-        return 0;
+        symmTensorFields_.append(fieldName);
+        return 1;
     }
     else if (fieldType == volTensorField::typeName)
     {
-        //r.tensorFields_.append(fieldName);
-        return 0;
+        tensorFields_.append(fieldName);
+        return 1;
     }
     */
     else
@@ -79,54 +102,69 @@ Foam::label Foam::adiosWrite::appendFieldGroup
     return 0;
 }
 
-/*void Foam::adiosWrite::test_print_obr()
+
+Foam::label Foam::adiosWrite::regionInfo::classifyFields
+(
+    const fvMesh& mesh
+)
 {
-    Info<< "adiosWrite objectRegistry list: " << endl;
-    wordList allFields = obr_.sortedNames();
-    forAll(regions_, i)
+    label nFields = 0;
+    wordList allFields = mesh.sortedNames();
+
+    Info<< "  region " << info() << endl;
+
+    clearFields(); // clear it because we will add all of them again and again
+
+    if (autoWrite())
     {
-        regionInfo& r = regions_[i];
-        labelList indices = findStrings(r.objectNames_, allFields);
+        forAll(allFields, i)
+        {
+            const word& name = allFields[i];
+            const regIOobject* obj = mesh.find(name)();
+            const word& type = obj->type();
+
+            // auto-write field or explicitly requested
+            bool shouldWrite =
+            (
+                obj->writeOpt() == IOobject::AUTO_WRITE
+             || findStrings(objectNames_, name)
+            );
+
+            if (shouldWrite)
+            {
+                Info<< "    name = " << name << " type = " << type << endl;
+                nFields += appendFieldGroup(name, type);
+            }
+        }
+    }
+    else
+    {
+        labelList indices = findStrings(objectNames_, allFields);
+
         forAll(indices, fieldI)
         {
             const word& name = allFields[indices[fieldI]];
-            const word& type = obr_.find(name)()->type();
-            Info<< "  name = " << name << "  type = " << type << endl;
+            const word& type = mesh.find(name)()->type();
 
+            Info<< "    name = " << name << " type = " << type << endl;
+            nFields += appendFieldGroup(name, type);
         }
     }
-}*/
+
+    return nFields;
+}
+
 
 Foam::label Foam::adiosWrite::classifyFields()
 {
-    label nFields = 0;
-
-    // test_print_obr();
-
     Info<< endl << "Foam::adiosWrite::classifyFields: " << endl;
-    // Check currently available fields
 
-    forAll(regions_, regionI)
+    label nFields = 0;
+    forAll(regions_, i)
     {
-        regionInfo& r = regions_[regionI];
-        Info<< "  region " << regionI << " " << r.name_ << ": " << endl;
+        regionInfo& r = regions_[i];
 
-        r.scalarFields_.clear(); // clear it because we will add all of them again and again
-        r.vectorFields_.clear();
-        r.surfaceScalarFields_.clear();
-
-        const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-        wordList allFields = mesh.sortedNames();
-        labelList indices = findStrings(r.objectNames_, allFields);
-
-        forAll(indices, fieldI)
-        {
-            const word& fieldName = allFields[indices[fieldI]];
-            const word& type = mesh.find(fieldName)()->type();
-
-            Info<< "    name = " << fieldName << "  type = " << type << endl;
-            nFields += appendFieldGroup(r, fieldName, type);
-        }
+        nFields += r.classifyFields(time_.lookupObject<fvMesh>(r.name_));
     }
 
     return nFields;

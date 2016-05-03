@@ -1,4 +1,4 @@
-ADIOS_DIR = $(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/adios-1.9.0
+ADIOS_DIR = $(WM_THIRD_PARTY_DIR)/platforms/linux64Gcc/adios-git
 
 sinclude $(GENERAL_RULES)/mplib$(WM_MPLIB)
 sinclude $(RULES)/mplib$(WM_MPLIB)

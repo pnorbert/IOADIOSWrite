@@ -114,6 +114,9 @@ private:
     // Demand driven private data
     mutable Map<label>* shapeLookupPtr_;
 
+    //- Is field-type supported?
+    static bool supportedFieldType(const word& fieldType);
+
 
 protected:
 
@@ -138,8 +141,8 @@ protected:
         class regionInfo
         {
         public:
-            regionInfo() {};
-            ~regionInfo() {};
+            //- Normally want auto-write?
+            Switch autoWrite_;
 
             //- Name of the region
             word name_;
@@ -178,6 +181,57 @@ protected:
             //  Note this will have issues when multiple clouds exist
             label nTotalParticles_;
 
+            //- Construct null
+            regionInfo()
+            :
+                autoWrite_(true)
+            {};
+
+            ~regionInfo() {};
+
+
+            //- If auto-write is in effect
+            bool autoWrite() const
+            {
+                return autoWrite_;
+            }
+
+
+            //- Update the auto-write value if found in the dictionary
+            bool getAutoWrite(const dictionary& dict)
+            {
+                return autoWrite_.readIfPresent("autoWrite", dict);
+            }
+
+
+            //- Read info for one region from its own dictionary
+            void read
+            (
+                const fvMesh& mesh,
+                const dictionary& dict,
+                const dictionary& topDict = dictionary::null
+            );
+
+            //- Clear field groups
+            void clearFields()
+            {
+                scalarFields_.clear(); // clear it because we will add all of them again and again
+                vectorFields_.clear();
+                surfaceScalarFields_.clear();
+            }
+
+            //- Append fieldName to the appropriate group
+            label appendFieldGroup
+            (
+                const word& fieldName,
+                const word& fieldType
+            );
+
+            //- Classify fields into the appropriate groups,
+            //  returns the number of fields
+            label classifyFields(const fvMesh& mesh);
+
+
             //- Path name for regions
             fileName regionPath() const
             {
@@ -201,6 +255,13 @@ protected:
             {
                 return regionPath() / ("cloud" + Foam::name(cloudId));
             }
+
+            //- Simple text representation for output purposes
+            word info() const
+            {
+                return "region" + Foam::name(index_) + "=" + name_;
+            }
+
         };
 
 
@@ -218,11 +279,14 @@ protected:
         //- List of regions holding all data needed (mesh, names)
         List<regionInfo> regions_;
 
-        //- ADIOS I/O method to use
-        word adiosMethod_;
+        //- ADIOS input read method (default: BP)
+        word readMethod_;
 
-        //- ADIOS I/O method parameters
-        string methodParams_;
+        //- ADIOS output write method (default: MPI)
+        word writeMethod_;
+
+        //- ADIOS output write parameters (default: "")
+        string writeParams_;
 
         //- Write interval (in number of iterations)
         label writeInterval_;
@@ -625,15 +689,8 @@ protected:
 
         // Miscallenous definitions
 
-            //- Read info for one region from it's own dictionary
-            void read_region(const dictionary& dict, regionInfo&);
-
-            //- Append fieldName to the appropriate group
-            label appendFieldGroup(regionInfo&, const word& fieldName, const word& fieldType);
-
             //- Classify field types, returns the number of fields
             label classifyFields();
-            //void test_print_obr();
 
             //- Disallow default bitwise copy construct
             adiosWrite(const adiosWrite&);

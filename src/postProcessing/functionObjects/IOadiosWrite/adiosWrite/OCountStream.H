@@ -155,7 +155,7 @@ public:
 
 
 /*---------------------------------------------------------------------------*\
-                         Class OSCountStream Declaration
+                        Class OCountStream Declaration
 \*---------------------------------------------------------------------------*/
 
 //- An output stream for calculating byte counts

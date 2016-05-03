@@ -30,8 +30,7 @@ License
 
 size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 {
-    Info<< "  adiosWrite::fieldDefine: region "
-        << rInfo.index_ << "=" << rInfo.name_ << endl;
+    Info<< "  adiosWrite::fieldDefine: " << rInfo.info() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 

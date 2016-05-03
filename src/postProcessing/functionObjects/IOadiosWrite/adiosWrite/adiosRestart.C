@@ -93,8 +93,7 @@ bool Foam::adiosWrite::fieldRead
 {
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
-    Pout<< "  adiosWrite::fieldRead: region "
-        << rInfo.index_ << "=" << rInfo.name_ << endl;
+    Pout<< "  adiosWrite::fieldRead: " << rInfo.info() << endl;
 
     return
     (

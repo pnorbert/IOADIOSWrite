@@ -33,8 +33,7 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
     size_t bufLen = 0;
     size_t maxLen = 0;
 
-    Info<< "adiosWrite::meshDefine: region"
-        << r.index_ << "=" << r.name_ << " at time "
+    Info<< "adiosWrite::meshDefine: " << r.info() << " at time "
         << time_.timeName() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
@@ -97,8 +96,7 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
 
 void Foam::adiosWrite::meshWrite(const regionInfo& r)
 {
-    Info<< "adiosWrite::meshWrite: region"
-        << r.index_ << "=" << r.name_ << " at time "
+    Info<< "adiosWrite::meshWrite: " << r.info() << " at time "
         << time_.timeName() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
