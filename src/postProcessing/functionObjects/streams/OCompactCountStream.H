@@ -126,9 +126,15 @@ public:
     // Constructors
 
         //- Construct and set stream status
-        ORawCountStream() : OCompactCountStream()
+        ORawCountStream
+        (
+            streamFormat format=ASCII,
+            versionNumber version=currentVersion
+        )
+        :
+            OCompactCountStream(format, version)
         {
-            raw(true);
+            raw(true); // raw also forces binary format
         }
 };
 

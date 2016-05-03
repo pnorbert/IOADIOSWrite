@@ -16,7 +16,7 @@ adiosWrite/ParticleBinaryBlob.C
 adiosWrite/ParticleBinaryBlobFragment.C
 
 /* these files should likely migrate into the OpenFOAM src */
-adiosWrite/OCompactStream.C
+/* adiosWrite/OCompactStream.C */
 adiosWrite/CStringList.C
 
 LIB = $(FOAM_USER_LIBBIN)/libIOadiosWrite
