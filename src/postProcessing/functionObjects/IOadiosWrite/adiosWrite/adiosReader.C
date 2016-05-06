@@ -155,6 +155,41 @@ void Foam::adiosReader::helper::scan(bool verbose)
 }
 
 
+Foam::HashTable<Foam::adiosReader::fieldInfo>
+Foam::adiosReader::helper::getFieldInfo(const word& regName) const
+{
+    const string startsWith = regName / "field";
+
+    typedef HashTable<size_t, fileName> VarContainer;
+
+    HashTable<fieldInfo> table;
+
+    forAllConstIter(VarContainer, variables, iter)
+    {
+        const fileName& varName = iter.key();
+        size_t bytes = iter();
+
+        if (varName.count('/') == 2 && varName.path() == startsWith)
+        {
+            // matches regName/field/xxx
+
+            table.insert
+            (
+                varName.name(),
+                fieldInfo
+                (
+                    varName,
+                    bytes,
+                    getStringAttribute(varName/"class")
+                )
+            );
+        }
+    }
+
+    return table;
+}
+
+
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
 
@@ -489,7 +524,7 @@ bool Foam::adiosReader::helper::readIntAttributeIfPresent
                     << "incorrect type for attribute: " << attrName << nl
                     << "  expecting int/unsigned, found "
                     << adios_type_to_string(type)
-                        << exit(FatalIOError);
+                    << exit(FatalIOError);
             }
         }
     }
@@ -582,8 +617,62 @@ bool Foam::adiosReader::helper::readIntListAttributeIfPresent
                     << "incorrect type for attribute: " << attrName << nl
                     << "  expecting int/unsigned, found "
                     << adios_type_to_string(type)
-                        << exit(FatalIOError);
+                    << exit(FatalIOError);
             }
+        }
+    }
+
+    return ok;
+}
+
+
+bool Foam::adiosReader::helper::readStringAttributeIfPresent
+(
+    const string& attrName,
+    string &value
+) const
+{
+    enum ADIOS_DATATYPES type = adios_unknown;
+    int  size = 0;
+    void *data = 0;
+
+    bool ok =
+    (
+        attributes.found(attrName)
+     && 0 ==
+        adios_get_attr_byid
+        (
+            file,
+            attributes[attrName],
+            &type,
+            &size,
+            &data
+        )
+    );
+
+    if (ok)
+    {
+        if (type == adios_string)
+        {
+            value = reinterpret_cast<char*>(data);
+        }
+        else
+        {
+            ok = false;
+        }
+
+        if (data)
+        {
+            free(data);
+        }
+
+        if (!ok)
+        {
+            FatalErrorInFunction
+                << "incorrect type for attribute: " << attrName << nl
+                << "  expecting string, found "
+                << adios_type_to_string(type)
+                << exit(FatalIOError);
         }
     }
 
@@ -620,6 +709,24 @@ Foam::List<Foam::label> Foam::adiosReader::helper::getIntListAttribute
     {
         FatalErrorInFunction
             << "int-list attribute missing: " << attrName
+            << exit(FatalIOError);
+    }
+
+    return value;
+}
+
+
+Foam::string Foam::adiosReader::helper::getStringAttribute
+(
+    const string& attrName
+) const
+{
+    string value;
+
+    if (!readStringAttributeIfPresent(attrName, value))
+    {
+        FatalErrorInFunction
+            << "string attribute missing: " << attrName
             << exit(FatalIOError);
     }
 

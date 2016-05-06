@@ -669,11 +669,22 @@ protected:
                 const fieldGroup<typename FieldType::value_type>& fields
             );
 
-            //- Field read wrapper
+
+            //- Read data for a given volume field type
+            bool readVolField
+            (
+                regIOobject* obj,
+                adiosReader::helper& helper,
+                const adiosReader::fieldInfo& src
+            );
+
+            //- Read data for a given type
+            template<class FieldType>
             bool fieldRead
             (
+                FieldType& field,
                 adiosReader::helper& helper,
-                regionInfo&
+                const adiosReader::fieldInfo& src
             );
 
             //- Read data for a given type
@@ -682,8 +693,7 @@ protected:
             (
                 adiosReader::helper& helper,
                 const fvMesh& mesh,
-                regionInfo&,
-                const fieldGroup<typename FieldType::value_type>& fields
+                const adiosReader::fieldInfo& src
             );
 
 

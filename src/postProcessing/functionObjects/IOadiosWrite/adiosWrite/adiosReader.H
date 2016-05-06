@@ -57,6 +57,63 @@ class adiosReader
 {
 public:
 
+    class fieldInfo
+    :
+        public fileName
+    {
+        size_t nbytes_;
+        word className_;
+
+    public:
+
+        fieldInfo()
+        :
+            fileName(),
+            nbytes_(0),
+            className_()
+        {}
+
+        fieldInfo
+        (
+            const fileName& varName,
+            size_t nbytes,
+            const word& className
+        )
+        :
+            fileName(varName),
+            nbytes_(nbytes),
+            className_(className)
+        {}
+
+
+        //- The region name is before the first /
+        const word regionName() const
+        {
+            return substr(0, find('/')); // not designed for failure
+        }
+
+
+        //- Return file name (part beyond last /)
+        using fileName::name;
+
+        //- Return directory path name (part before last /)
+        using fileName::path;
+
+
+        //- The class (volScalarField etc)
+        const word& type() const
+        {
+            return className_;
+        }
+
+        //- Local size in bytes
+        size_t length() const
+        {
+           return nbytes_;
+        }
+    };
+
+
     class helper
     {
 
@@ -109,6 +166,8 @@ public:
 
         void scan(bool verbose=false);
 
+        HashTable<fieldInfo> getFieldInfo(const word& regName) const;
+
         void close();
 
         //- Read integer attribute if it exists
@@ -127,12 +186,12 @@ public:
         ) const;
 
 
-        //- Get a mandatory integer attribute
-        label getIntAttribute(const string& attrName) const;
-
-
-        //- Get a mandatory integer list attribute
-        List<label> getIntListAttribute(const string& attrName) const;
+        //- Read string attribute if it exists
+        bool readStringAttributeIfPresent
+        (
+            const string& attrName,
+            string &value
+        ) const;
 
 
         //- Read string-list attribute if it exists
@@ -143,6 +202,15 @@ public:
             List<StringType>& lst
         ) const;
 
+
+        //- Get a mandatory integer attribute
+        label getIntAttribute(const string& attrName) const;
+
+        //- Get a mandatory integer list attribute
+        List<label> getIntListAttribute(const string& attrName) const;
+
+        //- Get a mandatory string attribute
+        string getStringAttribute(const string& attrName) const;
 
         //- Get a mandatory integer attribute
         template<class StringType>

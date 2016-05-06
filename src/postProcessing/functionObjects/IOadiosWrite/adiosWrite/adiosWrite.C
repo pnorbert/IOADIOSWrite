@@ -90,10 +90,16 @@ void Foam::adiosWrite::regionInfo::read
 
     if (missingObjects.size())
     {
+        // make list more readable (single line)
+        OStringStream list;
+        forAll(missingObjects, i)
+        {
+            list << ' ' << missingObjects[i];
+        }
+
         WarningInFunction
-            << "Objects not found in database:" << missingObjects
-            << "Available objects:" << nl << mesh.sortedToc()
-            << endl;
+            << missingObjects.size() << " objects not found in database:" << nl
+            << "   " << list.str().c_str() << endl;
     }
 
     // Also print the cloud names

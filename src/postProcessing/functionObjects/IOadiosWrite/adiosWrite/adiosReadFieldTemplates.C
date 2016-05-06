@@ -38,56 +38,91 @@ License
 template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (
+    FieldType& field,
     adiosReader::helper& helper,
-    const fvMesh& mesh,
-    regionInfo& rInfo,
-    const fieldGroup<typename FieldType::value_type>& fields
+    const adiosReader::fieldInfo& src
 )
 {
     bool ok = true;
 
-    forAll(fields, fieldI)
+    // Read data from file - fatal error if this fails!
+    ok = helper.getDataSet(src);
+    if (ok)
     {
-        // Lookup field
-        FieldType& field = const_cast<FieldType&>
-        (
-            mesh.lookupObject<FieldType>(fields[fieldI])
-        );
+        // read fields via dictionary
+        IBufStream is(helper.buffer, adiosCore::strFormat);
+        dictionary dict(is);
 
-        Pout<< "    readField via dictionary: " << field.name() << endl;
+        Pout<<"dictionary: " << field.name() << " with "
+            << dict.toc() << " boundaryField: "
+            << dict.subDict("boundaryField").toc() << endl;
 
-        // Read data from file
-        ok = helper.getDataSet(rInfo.fieldPath(fields[fieldI]));
-        if (ok)
-        {
-            // read fields via dictionary
-            IBufStream is(helper.buffer, adiosCore::strFormat);
-            dictionary dict(is);
+        // could also verify dimensions
+        field.readField(dict, "internalField");
+        field.boundaryField().readField(field, dict.subDict("boundaryField"));
 
-            Pout<<"dictionary: " << field.name() << " with "
-                << dict.toc() << " boundaryField: "
-                << dict.subDict("boundaryField").toc() << endl;
+        // TODO: adjust for referenceLevel?
+        //
+        //     if (dict.found("referenceLevel"))
+        //     {
+        //         Type fieldAverage(pTraits<Type>(dict.lookup("referenceLevel")));
+        //         Field<Type>::operator+=(fieldAverage);
+        //         forAll(boundaryField_, patchI)
+        //         {
+        //             boundaryField_[patchI] == boundaryField_[patchI] + fieldAverage;
+        //         }
+        //     }
+    }
 
-            // could also verify dimensions
-            field.readField(dict, "internalField");
-            field.boundaryField().readField(field, dict.subDict("boundaryField"));
+    return ok;
+}
 
-            // TODO: adjust for referenceLevel?
-            //
-            //     if (dict.found("referenceLevel"))
-            //     {
-            //         Type fieldAverage(pTraits<Type>(dict.lookup("referenceLevel")));
-            //         Field<Type>::operator+=(fieldAverage);
-            //         forAll(boundaryField_, patchI)
-            //         {
-            //             boundaryField_[patchI] == boundaryField_[patchI] + fieldAverage;
-            //         }
-            //     }
-        }
-        else
-        {
-            break;
-        }
+
+template<class FieldType>
+bool Foam::adiosWrite::fieldRead
+(
+    adiosReader::helper& helper,
+    const fvMesh& mesh,
+    const adiosReader::fieldInfo& src
+)
+{
+    bool ok = true;
+
+    // Lookup field
+    FieldType& field = const_cast<FieldType&>
+    (
+        mesh.lookupObject<FieldType>(src.name())
+    );
+
+    Pout<< "    readField via dictionary: " << field.name() << endl;
+
+    // Read data from file - fatal error if this fails!
+    ok = helper.getDataSet(src);
+    if (ok)
+    {
+        // read fields via dictionary
+        IBufStream is(helper.buffer, adiosCore::strFormat);
+        dictionary dict(is);
+
+        Pout<<"dictionary: " << field.name() << " with "
+            << dict.toc() << " boundaryField: "
+            << dict.subDict("boundaryField").toc() << endl;
+
+        // could also verify dimensions
+        field.readField(dict, "internalField");
+        field.boundaryField().readField(field, dict.subDict("boundaryField"));
+
+        // TODO: adjust for referenceLevel?
+        //
+        //     if (dict.found("referenceLevel"))
+        //     {
+        //         Type fieldAverage(pTraits<Type>(dict.lookup("referenceLevel")));
+        //         Field<Type>::operator+=(fieldAverage);
+        //         forAll(boundaryField_, patchI)
+        //         {
+        //             boundaryField_[patchI] == boundaryField_[patchI] + fieldAverage;
+        //         }
+        //     }
     }
 
     return ok;

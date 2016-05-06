@@ -53,17 +53,43 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
     helper.scan(true);
     helper.buffer.reserve(helper.maxLen);
 
+    // direct lookup via time_.lookupClass<fvMesh>() would be nice,
+    // but have to trick the compiler not to get the const-version.
+    // - instead, get the names and do the lookup ourselves
+
+    wordList meshNames = time_.names<fvMesh>();
+    sort(meshNames);
+
+    // this is somewhat like demand-driven loading
+    forAll(meshNames, regI)
+    {
+        const word& regName = meshNames[regI];
+        fvMesh& mesh = const_cast<fvMesh&>(time_.lookupObject<fvMesh>(regName));
+
+        Info<<"lookup: " << regName << endl;
+
+        HashTable<adiosReader::fieldInfo> fromFile = helper.getFieldInfo(regName);
+        wordList fieldNames = fromFile.sortedToc();
+
+        forAll(fieldNames, fieldI)
+        {
+            const word& name = fieldNames[fieldI];
+            const adiosReader::fieldInfo& src = fromFile[name];
+
+            if ((static_cast<objectRegistry&>(mesh)).found(name))
+            {
+                readVolField(mesh.find(name)(), helper, src);
+            }
+        }
+    }
+
+
     bool ok = true;
     forAll(regions_, regionId)
     {
         regionInfo& rInfo = regions_[regionId];
 
-        ok =
-        (
-            ok
-         && fieldRead(helper, rInfo)
-         && readClouds(helper, rInfo)
-        );
+        ok = readClouds(helper, rInfo);
     }
 
     helper.close();
@@ -85,47 +111,86 @@ bool Foam::adiosWrite::readData()
 }
 
 
-bool Foam::adiosWrite::fieldRead
+
+bool Foam::adiosWrite::readVolField
 (
+    regIOobject* obj,
     adiosReader::helper& helper,
-    regionInfo& rInfo
+    const adiosReader::fieldInfo& src
 )
 {
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+    const word& fieldType = obj->type();
+    const word&   srcType = src.type();
 
-    Pout<< "  adiosWrite::fieldRead: " << rInfo.info() << endl;
+    if (fieldType != srcType)
+    {
+        // probably fatal:
+        Info<<"WARNING mismatch on field " << src
+            << " (expected: " << fieldType
+            << " but had " << srcType << ")\n";
+        return false;
+    }
 
-    return
-    (
-        fieldRead<volScalarField>
+    Info<<"read " << obj->name() << " (type " << fieldType << ") from file\n";
+    if (fieldType == volScalarField::typeName)
+    {
+        return fieldRead
         (
+            static_cast<volScalarField&>(*obj),
             helper,
-            mesh,
-            rInfo,
-            rInfo.scalarFields_
-        )
-     && fieldRead<volVectorField>
+            src
+        );
+    }
+    else if (fieldType == volVectorField::typeName)
+    {
+        return fieldRead
         (
+            static_cast<volVectorField&>(*obj),
             helper,
-            mesh,
-            rInfo,
-            rInfo.vectorFields_
-        )
-     && fieldRead<surfaceScalarField>
+            src
+        );
+    }
+    else if (fieldType == surfaceScalarField::typeName)
+    {
+        return fieldRead
         (
+            static_cast<surfaceScalarField&>(*obj),
             helper,
-            mesh,
-            rInfo,
-            rInfo.surfaceScalarFields_
-        )
-    );
+            src
+        );
+    }
+    else if (fieldType == volSphericalTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<volSphericalTensorField&>(*obj),
+            helper,
+            src
+        );
+    }
+    else if (fieldType == volSymmTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<volSymmTensorField&>(*obj),
+            helper,
+            src
+        );
+    }
+    else if (fieldType == volTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<volTensorField&>(*obj),
+            helper,
+            src
+        );
+    }
+    else
+    {
+        return false;
+    }
 }
-
-// processor0/0.004/uniform/lagrangian/kinematicCloud/cloudProperties <stream>   - same for all processors
-// processor0/0.004/uniform/lagrangian/kinematicCloud/kinematicCloudOutputProperties <stream>    - same for all processors
-
-// processor0/0.004/lagrangian/kinematicCloud/
-// processor0/0.004/lagrangian/kinematicCloud/{U, age, active, angularMom} ...
 
 
 bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo)
