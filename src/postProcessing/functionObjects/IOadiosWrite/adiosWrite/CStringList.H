@@ -109,6 +109,7 @@ public:
 
     // Public Members
 
+
     // Access
 
         //- Return the number of C-strings
@@ -138,6 +139,14 @@ public:
         //- Copy the input list of strings.
         template<class StringType>
         void reset(const UList<StringType>& input);
+
+
+    // Other
+
+        //- Create a string list from argc/argv parameters.
+        //  A null pointer for argv is permissible when argc is zero.
+        template<class StringType>
+        static List<StringType> asList(int argc, const char * const argv[]);
 
 };
 

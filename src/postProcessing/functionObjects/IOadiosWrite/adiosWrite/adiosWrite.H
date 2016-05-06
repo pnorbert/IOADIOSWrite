@@ -345,7 +345,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineVariable
             (
-                const fileName& name,
+                const string& name,
                 enum ADIOS_DATATYPES type,
                 size_t count
             );
@@ -363,7 +363,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineIntVariable
             (
-                const fileName& name
+                const string& name
             );
 
             //- Define an integer variable with count elements
@@ -378,7 +378,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineIntVariable
             (
-                const fileName& name,
+                const string& name,
                 size_t count
             );
 
@@ -395,7 +395,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineScalarVariable
             (
-                const fileName& name
+                const string& name
             );
 
             //- Define a double variable with count elements
@@ -410,7 +410,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineScalarVariable
             (
-                const fileName& name,
+                const string& name,
                 size_t count
             );
 
@@ -426,7 +426,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineStreamVariable
             (
-                const fileName& name,
+                const string& name,
                 size_t count
             );
 
@@ -441,7 +441,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineVectorVariable
             (
-                const fileName& name
+                const string& name
             );
 
             //- Define a vector (3 items) variable with count elements
@@ -456,7 +456,7 @@ protected:
             //  Increment the output size and return the storage size
             size_t defineVectorVariable
             (
-                const fileName& name,
+                const string& name,
                 size_t count
             );
 
@@ -472,7 +472,7 @@ protected:
             void defineAttribute
             (
                 const char* attrName,
-                const fileName& varName,
+                const string& varName,
                 const string& value
             );
 
@@ -488,7 +488,7 @@ protected:
             void defineIntAttribute
             (
                 const char* attrName,
-                const fileName& varName,
+                const string& varName,
                 const int value
             );
 
@@ -496,7 +496,7 @@ protected:
             bool defineListAttribute
             (
                 const char* attrName,
-                const fileName& varName,
+                const string& varName,
                 const UList<int>& list
             );
 
@@ -504,7 +504,7 @@ protected:
             bool defineListAttribute
             (
                 const char* attrName,
-                const fileName& varName,
+                const string& varName,
                 const wordList& list
             );
 
@@ -512,7 +512,7 @@ protected:
             bool defineListAttribute
             (
                 const char* attrName,
-                const fileName& varName,
+                const string& varName,
                 const stringList& list
             );
 
@@ -526,7 +526,7 @@ protected:
             //- Write a variable
             void writeVariable
             (
-                const fileName& name,
+                const string& name,
                 const void* value
             );
 
@@ -545,7 +545,7 @@ protected:
             template<class T>
             void writeVariable
             (
-                const fileName& name,
+                const string& name,
                 const UList<T>& list
             )
             {
@@ -562,7 +562,7 @@ protected:
             //- Write a variable with a single integer
             void writeIntVariable
             (
-                const fileName& name,
+                const string& name,
                 const int value
             );
 
@@ -576,7 +576,7 @@ protected:
             //- Write a variable with a single double value
             void writeScalarVariable
             (
-                const fileName& name,
+                const string& name,
                 const double value
             );
 
@@ -590,7 +590,7 @@ protected:
             //- Write a variable with a single vector value
             void writeVectorVariable
             (
-                const fileName& name,
+                const string& name,
                 const vector& value
             );
 

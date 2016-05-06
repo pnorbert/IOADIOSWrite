@@ -1,6 +1,6 @@
 ## Preliminary layout for OpenFOAM data within ADIOS
 
-2016-05-02
+2016-05-06
 
 ---
 
@@ -23,34 +23,37 @@
 
 ---
 
-### Global Attributes
+### General Attributes
 
-These attributes can be used to provide some assistance when reading
-the data.
-
-
-| type      | name                          | example
-|-----------|-------------------------------|--------
-| string    | /\_\_openfoam\_\_/version     | "plus-e40d8870f95a"
-| string    | /\_\_openfoam\_\_/platform    | "linux64Gcc"
-| integer   | /\_\_openfoam\_\_/label-size  | 32
-| string    | /\_\_openfoam\_\_/precision   | "double"
-| integer   | /\_\_openfoam\_\_/updateMesh  | 1
-| integer   | /\_\_openfoam\_\_/nProcs      | 4
-| integer   | /\_\_openfoam\_\_/nregions    | 1
+These attributes provide assistance when reading the data files.
 
 
-### Global Variables
+| type    | name                        | example
+|---------|-----------------------------|--------
+| _any_   | /constant/...               | _reserved_
+| _any_   | /system/...                 | _reserved_
+| string  | /openfoam/version           | "plus-e40d8870f95a"
+| string  | /openfoam/platform          | "linux64Gcc"
+| int     | /openfoam/label-size        | 32
+| string  | /openfoam/precision         | "double"
+| int     | /openfoam/updateMesh        | 1 (bool, but may change in the future to include indexing etc)
+| int     | /openfoam/nProcs            | 4
+| int     | /openfoam/nRegions          | 2
+| string[]| /openfoam/regions           | {"region0", "solid"}
+
+
+### General Variables
 
 Coordinated data for all mesh, fields and cloud information.
 
-| type      | name                          | comment
-|-----------|-------------------------------|-------------
-| integer   | time/index                    | iteration
-| double    | time/value                    | time-value
-| double    | time/deltaT                   |
-| double    | time/deltaT0                  |
-| integer   | nregions                      | *to-be-deprecated?*
+| type    | name                        | comment
+|---------|-----------------------------|-------------
+| _any_   | /constant/...               | _reserved_
+| _any_   | /system/...                 | _reserved_
+| int     | /time/index                 | iteration
+| double  | /time/value                 | time-value
+| double  | /time/deltaT                |
+| double  | /time/deltaT0               |
 
 
 

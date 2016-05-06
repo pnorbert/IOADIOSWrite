@@ -89,4 +89,19 @@ void Foam::CStringList::reset
 }
 
 
+template<class StringType>
+Foam::List<StringType>
+Foam::CStringList::asList(int argc, const char * const argv[])
+{
+    List<StringType> lst(argc);
+
+    for (int i=0; i < argc; ++i)
+    {
+        lst[i] = argv[i];
+    }
+
+    return lst;
+}
+
+
 // ************************************************************************* //

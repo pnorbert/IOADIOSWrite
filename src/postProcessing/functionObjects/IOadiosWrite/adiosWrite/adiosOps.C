@@ -145,7 +145,7 @@ size_t Foam::adiosWrite::defineVariable
 
 size_t Foam::adiosWrite::defineVariable
 (
-    const fileName& name,
+    const string& name,
     enum ADIOS_DATATYPES type,
     size_t count
 )
@@ -180,7 +180,7 @@ size_t Foam::adiosWrite::defineIntVariable
 
 size_t Foam::adiosWrite::defineIntVariable
 (
-    const fileName& name
+    const string& name
 )
 {
     return defineIntVariable(name.c_str());
@@ -214,7 +214,7 @@ size_t Foam::adiosWrite::defineIntVariable
 
 size_t Foam::adiosWrite::defineIntVariable
 (
-    const fileName& name,
+    const string& name,
     size_t count
 )
 {
@@ -248,7 +248,7 @@ size_t Foam::adiosWrite::defineScalarVariable
 
 size_t Foam::adiosWrite::defineScalarVariable
 (
-    const fileName& name
+    const string& name
 )
 {
     return defineScalarVariable(name.c_str());
@@ -282,7 +282,7 @@ size_t Foam::adiosWrite::defineScalarVariable
 
 size_t Foam::adiosWrite::defineScalarVariable
 (
-    const fileName& name,
+    const string& name,
     size_t count
 )
 {
@@ -319,7 +319,7 @@ size_t Foam::adiosWrite::defineStreamVariable
 
 size_t Foam::adiosWrite::defineStreamVariable
 (
-    const fileName& name,
+    const string& name,
     size_t count
 )
 {
@@ -356,7 +356,7 @@ size_t Foam::adiosWrite::defineVectorVariable
 
 size_t Foam::adiosWrite::defineVectorVariable
 (
-    const fileName& name
+    const string& name
 )
 {
     return defineVectorVariable(name.c_str());
@@ -392,7 +392,7 @@ size_t Foam::adiosWrite::defineVectorVariable
 
 size_t Foam::adiosWrite::defineVectorVariable
 (
-    const fileName& name,
+    const string& name,
     size_t count
 )
 {
@@ -422,7 +422,7 @@ void Foam::adiosWrite::defineAttribute
 void Foam::adiosWrite::defineAttribute
 (
     const char* attrName,
-    const fileName& varName,
+    const string& varName,
     const string& value
 )
 {
@@ -454,7 +454,7 @@ void Foam::adiosWrite::defineIntAttribute
 void Foam::adiosWrite::defineIntAttribute
 (
     const char* attrName,
-    const fileName& varName,
+    const string& varName,
     const int value
 )
 {
@@ -465,7 +465,7 @@ void Foam::adiosWrite::defineIntAttribute
 bool Foam::adiosWrite::defineListAttribute
 (
     const char* attrName,
-    const fileName& varName,
+    const string& varName,
     const UList<int>& list
 )
 {
@@ -491,7 +491,7 @@ bool Foam::adiosWrite::defineListAttribute
 bool Foam::adiosWrite::defineListAttribute
 (
     const char* attrName,
-    const fileName& varName,
+    const string& varName,
     const wordList& list
 )
 {
@@ -523,7 +523,7 @@ bool Foam::adiosWrite::defineListAttribute
 bool Foam::adiosWrite::defineListAttribute
 (
     const char* attrName,
-    const fileName& varName,
+    const string& varName,
     const stringList& list
 )
 {
@@ -564,7 +564,7 @@ void Foam::adiosWrite::writeVariable
 
 void Foam::adiosWrite::writeVariable
 (
-    const fileName& name,
+    const string& name,
     const void* value
 )
 {
@@ -584,7 +584,7 @@ void Foam::adiosWrite::writeIntVariable
 
 void Foam::adiosWrite::writeIntVariable
 (
-    const fileName& name,
+    const string& name,
     const int value
 )
 {
@@ -604,7 +604,7 @@ void Foam::adiosWrite::writeScalarVariable
 
 void Foam::adiosWrite::writeScalarVariable
 (
-    const fileName& name,
+    const string& name,
     const double value
 )
 {

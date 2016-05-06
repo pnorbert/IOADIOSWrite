@@ -181,14 +181,24 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
 
     // other general information
     defineIntAttribute("nProcs",    adiosCore::foamAttribute, Pstream::nProcs());
-    defineIntAttribute("nregions",  adiosCore::foamAttribute, regions_.size());
+    defineIntAttribute("nRegions",  adiosCore::foamAttribute, regions_.size());
+
+    // region-names attribute (list of strings)
+    {
+        stringList names(regions_.size());
+        forAll(regions_, regionI)
+        {
+            names[regionI] = regions_[regionI].name_;
+        }
+
+        defineListAttribute("regions", adiosCore::foamAttribute, names);
+    }
 
     // General information (as variable)
-    defineIntVariable("nregions");      // number of regions
-    defineIntVariable("time/index");
-    defineScalarVariable("time/value");
-    defineScalarVariable("time/deltaT");
-    defineScalarVariable("time/deltaT0");
+    defineIntVariable(adiosCore::timeAttribute/"index");
+    defineScalarVariable(adiosCore::timeAttribute/"value");
+    defineScalarVariable(adiosCore::timeAttribute/"deltaT");
+    defineScalarVariable(adiosCore::timeAttribute/"deltaT0");
 
     forAll(regions_, regionI)
     {
@@ -641,11 +651,26 @@ void Foam::adiosWrite::write()
         iobuffer_.reserve(maxLen);
 
         // General information (as variable)
-        writeIntVariable("nregions", regions_.size());
-        writeIntVariable("time/index",    time_.timeIndex());
-        writeScalarVariable("time/value", time_.timeOutputValue());
-        writeScalarVariable("time/deltaT", time_.deltaT().value());
-        writeScalarVariable("time/deltaT0", time_.deltaT0().value());
+        writeIntVariable
+        (
+            adiosCore::timeAttribute/"index",
+            time_.timeIndex()
+        );
+        writeScalarVariable
+        (
+            adiosCore::timeAttribute/"value",
+            time_.timeOutputValue()
+        );
+        writeScalarVariable
+        (
+            adiosCore::timeAttribute/"deltaT",
+            time_.deltaT().value()
+        );
+        writeScalarVariable
+        (
+            adiosCore::timeAttribute/"deltaT0",
+            time_.deltaT0().value()
+        );
 
         forAll(regions_, regionI)
         {

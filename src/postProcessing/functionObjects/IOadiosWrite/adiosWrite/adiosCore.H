@@ -102,7 +102,10 @@ public:
     static const IOstream::streamFormat strFormat = IOstream::BINARY;
 
     //- OpenFOAM global attributes within ADIOS file
-    static const char* const foamAttribute;
+    static const string foamAttribute;
+
+    //- General time variable within ADIOS file
+    static const string timeAttribute;
 
     typedef OCompactStringStream    OutputStringStreamer;
     typedef OCompactBufStream       OutputBufStreamer;

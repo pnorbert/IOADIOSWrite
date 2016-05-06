@@ -59,8 +59,11 @@ Foam::adiosCore::dataDirectory("adiosData");
 const Foam::word
 Foam::adiosCore::fileExt("bp");
 
-const char * const
-Foam::adiosCore::foamAttribute = "/__openfoam__";
+const Foam::string
+Foam::adiosCore::foamAttribute = "/openfoam";
+
+const Foam::string
+Foam::adiosCore::timeAttribute = "/time";
 
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
