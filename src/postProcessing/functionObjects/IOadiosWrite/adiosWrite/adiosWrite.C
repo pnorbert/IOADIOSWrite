@@ -27,7 +27,6 @@ License
 #include "dictionary.H"
 #include "HashSet.H"
 #include "scalar.H"
-#include "demandDrivenData.H"
 
 // some internal pre-processor stringifications
 #undef STRINGIFY
@@ -73,11 +72,6 @@ void Foam::adiosWrite::regionInfo::read
     {
         dict.lookup("cloudAttribs") >> cloudAttribs_;
     }
-
-#ifdef FOAM_ADIOS_CELL_SHAPES
-    // Set length of cell data size array
-    cellDataSizes_.setSize(Pstream::nProcs());
-#endif
 
     // Set length of particle numbers array
     nParticles_.setSize(Pstream::nProcs());
@@ -264,7 +258,6 @@ Foam::adiosWrite::adiosWrite
 )
 :
     adiosCore(groupName),
-    shapeLookupPtr_(NULL),
     obr_(obr),
     primaryMesh_(refCast<const fvMesh>(obr)),
     time_(primaryMesh_.time())
@@ -316,8 +309,6 @@ Foam::adiosWrite::~adiosWrite()
 {
     adios_free_group(groupID_); // not necessary but nice to cleanup
     adios_finalize(Pstream::myProcNo());
-
-    deleteDemandDrivenData(shapeLookupPtr_);
 
     MPI_Comm_free(&comm_);
 

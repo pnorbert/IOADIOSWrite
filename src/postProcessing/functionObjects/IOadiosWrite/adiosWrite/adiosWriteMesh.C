@@ -38,10 +38,6 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
-#ifdef FOAM_ADIOS_CELL_SHAPES
-    meshDefineCellShapes(mesh, r);
-#endif
-
     fileName varPath = r.meshPath();
 
     // summary information
@@ -100,10 +96,6 @@ void Foam::adiosWrite::meshWrite(const regionInfo& r)
         << time_.timeName() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-
-#ifdef FOAM_ADIOS_CELL_SHAPES
-    meshWriteCellShapes(mesh, r);
-#endif
 
     fileName varPath = r.meshPath();
 

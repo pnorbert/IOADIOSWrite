@@ -56,12 +56,6 @@ Author
 #include "adios_read.h"
 
 /**
- * write with cell-shapes to XDMF ids - will fail for non-primitive cell shapes
- */
-// #define FOAM_ADIOS_CELL_SHAPES
-// #undef  FOAM_ADIOS_CELL_SHAPES
-
-/**
  * write internal fields and patch fields separately
  * poor prospects for restart
  */
@@ -111,8 +105,6 @@ class adiosWrite
     public adiosCore
 {
 private:
-    // Demand driven private data
-    mutable Map<label>* shapeLookupPtr_;
 
     //- Is field-type supported?
     static bool supportedFieldType(const word& fieldType);
@@ -165,13 +157,6 @@ protected:
 
             //- Categorized scalar/vector/tensor surf fields
             fieldGroup<scalar> surfaceScalarFields_;
-
-#ifdef FOAM_ADIOS_CELL_SHAPES
-            //- Number of data points in output Cell array on each process
-            //  calculated in meshDefineCells, used in meshWriteCells
-            //  only the local size is used currently
-            List<label> cellDataSizes_;
-#endif
 
             //- Array containing number of particles per process (often used list)
             //  Note this will have issues when multiple clouds exist
@@ -325,9 +310,6 @@ protected:
 
             //- Close dataset
             void close();
-
-            //- Mapping from OpenFOAM cell shapes to XDMF
-            const Map<label>& shapeLookupMap() const;
 
 
         // General adios handling
@@ -675,16 +657,6 @@ protected:
 
             //- Mesh write wrapper
             void meshWrite(const regionInfo&);
-
-
-#ifdef FOAM_ADIOS_CELL_SHAPES
-
-            //- Define variable and size for cell shapes
-            void meshDefineCellShapes(const fvMesh&, regionInfo&);
-
-            //- Write cell shapes
-            void meshWriteCellShapes(const fvMesh&, const regionInfo&);
-#endif
 
 
         // Miscallenous definitions
