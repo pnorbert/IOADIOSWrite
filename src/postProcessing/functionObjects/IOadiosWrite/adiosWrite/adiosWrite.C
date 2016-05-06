@@ -458,13 +458,9 @@ void Foam::adiosWrite::read(const dictionary& dict)
 
     // Print info to terminal
     Info<< type() << " " << name() << ":" << endl
-        << "  Compiled with " << adiosTraits<scalar>::adiosSize << " bytes precision." << endl;
-
-    if (sizeof(ioScalar) != adiosTraits<scalar>::adiosSize)
-    {
-        Info<< "  Writing IO with " << sizeof(ioScalar) << " bytes precision." << endl;
-    }
-    Info<< "  writing every " << writeInterval_ << " iterations:" << endl;
+        << "  Compiled with " << adiosTraits<scalar>::adiosSize
+        << " bytes precision." << nl
+        << "  writing every " << writeInterval_ << " iterations:" << endl;
 
 
     restartTime_ = VGREAT;

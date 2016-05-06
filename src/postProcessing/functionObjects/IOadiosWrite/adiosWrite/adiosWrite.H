@@ -56,13 +56,6 @@ Author
 #include "adios_read.h"
 
 /**
- * write internal fields and patch fields separately
- * poor prospects for restart
- */
-// #define FOAM_ADIOS_PATCH_WRITE
-// #undef  FOAM_ADIOS_PATCH_WRITE
-
-/**
  * write cloud fields via explicit definition
  * poor prospects for restart
  */
@@ -80,17 +73,6 @@ Author
 
 namespace Foam
 {
-// If OpenFOAM is compiled with single precision, the IO will be single
-// precision.
-#if defined(WM_SP) || defined(WRITE_SP)
-# define ADIOS_IOSCALAR adios_real
-typedef float ioScalar;
-#elif defined(WM_DP)
-# define ADIOS_IOSCALAR adios_double
-typedef double ioScalar;
-#else
-# error "Neither WM_DP nor WM_SP defined when compiling adiosCore"
-#endif
 
 // Forward declaration of classes
 class objectRegistry;

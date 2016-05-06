@@ -74,71 +74,6 @@ size_t Foam::adiosWrite::fieldDefine
 
             defineAttribute("type", patchPath, pf.type());
         }
-
-
-#ifdef FOAM_ADIOS_PATCH_WRITE
-        varPath = "region" + Foam::name(rInfo.index_) / "fields" / fields[fieldI];
-
-        string localDim = Foam::name(field.size());
-        const int nCmpt = pTraits<typename FieldType::value_type>::nComponents;
-
-        if (nCmpt > 1)
-        {
-            localDim += "," + Foam::name(nCmpt);
-        }
-
-        // internalField
-        // store local to this process
-        adios_define_var
-        (
-            groupID_,
-            varPath.c_str(),
-            NULL,
-            adiosTraits<scalar>::adiosType,
-            localDim.c_str(),
-            NULL,
-            NULL
-        );
-
-        // Count the total size we are going to write from this process
-        outputSize_ += nCmpt * field.size() * adiosTraits<scalar>::adiosSize;
-
-        forAll(bfield, patchI)
-        {
-            const typename FieldType::PatchFieldType& pf = bfield[patchI];
-            fileName patchPath = varPath/"patch" + Foam::name(patchI);
-
-            Info<< "      patchfield " << patchI
-                << "(" << fields[fieldI] << ")"
-                << ": name=" << pf.patch().name()
-                << ": type=" << pf.type()
-                << " empty=" << pf.empty()
-                << " size=" << pf.size()
-                << endl;
-
-            os.rewind();
-            os << pf;
-
-            bufLen = defineStreamVariable(patchPath, os.size());
-            maxLen = Foam::max(maxLen, bufLen);
-
-            // additional attributes to describe this patch
-            defineAttribute("name", patchPath, pf.patch().name());
-            defineAttribute("type", patchPath, pf.type());
-
-            // Need much more such logic if we want to store patch values as arrays.
-            // This is non-trivial since not every patch-field has values for it faces
-
-            // Count the total size we are going to write from this process
-            // outputSize_ += pf.size()*pType::nComponents*sizeof(ioScalar); // size of data array
-
-            // forAll(pf, faceI)
-            // {
-            //     pf[faceI] = ...
-            // }
-        }
-
-#endif /* FOAM_ADIOS_PATCH_WRITE */
     }
 
     Pout<< "max stream-size: " << maxLen << endl;
@@ -170,36 +105,6 @@ void Foam::adiosWrite::fieldWrite
 
         // Do the actual write (as stream)
         writeVariable(varPath, iobuffer_);
-
-#ifdef FOAM_ADIOS_PATCH_WRITE
-        varPath = "region" + Foam::name(rInfo.index_) / "fields" / fields[fieldI];
-
-        Info<< "    fieldWrite: " << varPath << endl;
-
-        // write internalField
-        writeVariable(varPath, field.internalField());
-
-        const typename FieldType::GeometricBoundaryField& bfield =
-            field.boundaryField();
-
-        // Do the same for all patches
-        forAll(bfield, patchI)
-        {
-            const typename FieldType::PatchFieldType& pf = bfield[patchI];
-
-            fileName patchPath = varPath / "patch" + Foam::name(patchI);
-            // Info<< "      patchfield " << patchI << ":" << endl;
-
-            {
-                OutputBufStreamer os(iobuffer_, adiosCore::strFormat);
-                os << pf;
-            }
-
-            writeVariable(patchPath, iobuffer_);
-        }
-
-#endif /* FOAM_ADIOS_PATCH_WRITE */
-
     }
 }
 
