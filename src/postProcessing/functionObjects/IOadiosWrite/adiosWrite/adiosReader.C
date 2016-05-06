@@ -24,6 +24,8 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosReader.H"
+#include "adiosCore.H"
+
 #include "dictionary.H"
 #include "IOstreams.H"
 #include "Pstream.H"

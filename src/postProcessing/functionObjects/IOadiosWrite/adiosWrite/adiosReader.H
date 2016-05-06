@@ -37,6 +37,7 @@ SourceFiles
 #include "fileName.H"
 #include "IBufStream.H"
 #include "DynamicCharList.H"
+#include "HashTable.H"
 
 #include "adios.h"
 #include "adios_read.h"

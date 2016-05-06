@@ -114,9 +114,6 @@ protected:
             //- Name of the region
             word name_;
 
-            //- Index of the region in the list
-            label index_;
-
             //- Names of volume fields per region to write
             wordReList objectNames_;
 
@@ -193,9 +190,9 @@ protected:
 
 
             //- Path name for regions
-            fileName regionPath() const
+            string regionPath() const
             {
-                return "region" + Foam::name(index_);
+                return name_;
             }
 
             //- Path name for fields
@@ -210,16 +207,16 @@ protected:
                 return regionPath() / "polyMesh" / var;
             }
 
-            //- Path name for cloud-Id
-            fileName cloudPath(label cloudId) const
+            //- Path name for named cloud
+            fileName cloudPath(const string& cloudName) const
             {
-                return regionPath() / ("cloud" + Foam::name(cloudId));
+                return regionPath() / "cloud" / cloudName;
             }
 
             //- Simple text representation for output purposes
             word info() const
             {
-                return "region" + Foam::name(index_) + "=" + name_;
+                return name_;
             }
 
         };

@@ -202,18 +202,19 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
         const polyPatchList& patches = mesh.boundaryMesh();
 
-        defineAttribute("name",        varPath, rInfo.name_);
-        defineIntAttribute("npatches", varPath, patches.size());
-
+        stringList pNames(patches.size());
+        stringList pTypes(patches.size());
         forAll(patches, patchI)
         {
             const polyPatch& p = patches[patchI];
-            fileName patchPath = varPath/"patch" + Foam::name(patchI);
 
-            // global attributes for this patch
-            defineAttribute("name",  patchPath, p.name());
-            defineAttribute("type",  patchPath, p.type());
+            pNames[patchI] = p.name();
+            pTypes[patchI] = p.type();
         }
+
+        defineIntAttribute("nPatches",     varPath, patches.size());
+        defineListAttribute("patch-names", varPath, pNames);
+        defineListAttribute("patch-types", varPath, pTypes);
 
         if (updateMesh)
         {
@@ -375,7 +376,6 @@ void Foam::adiosWrite::read(const dictionary& dict)
             {
                 if (time_.foundObject<fvMesh>(regName))
                 {
-                    regions_[nRegion].index_ = nRegion;
                     regions_[nRegion].name_  = regName;
 
                     regions_[nRegion].read
@@ -416,7 +416,6 @@ void Foam::adiosWrite::read(const dictionary& dict)
         word regName = primaryMesh_.name();
         if (regionNames.found(regName))
         {
-            regions_[nRegion].index_     = nRegion;
             regions_[nRegion].name_      = regName;
             regions_[nRegion].autoWrite_ = true;
             ++nRegion;
@@ -433,7 +432,6 @@ void Foam::adiosWrite::read(const dictionary& dict)
             if (time_.foundObject<fvMesh>(regName))
             {
                 // this lookup cannot actually fail
-                regions_[nRegion].index_     = nRegion;
                 regions_[nRegion].name_      = regName;
                 regions_[nRegion].autoWrite_ = true;
                 ++nRegion;
@@ -479,9 +477,9 @@ void Foam::adiosWrite::read(const dictionary& dict)
     }
 
     Info<< type() << " " << name() << ":" << nl
-        << "  ADIOS write method: " << writeMethod_ << nl
-        << "     with parameters: " << writeParams_ << nl
-        << "      write interval: " << writeInterval_ << endl;
+        << "  ADIOS writeMethod: " << writeMethod_ << nl
+        << "        writeParams: " << writeParams_ << nl
+        << "     write interval: " << writeInterval_ << endl;
 }
 
 

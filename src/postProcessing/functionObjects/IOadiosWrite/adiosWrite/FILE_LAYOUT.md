@@ -26,6 +26,7 @@
 ### General Attributes
 
 These attributes provide assistance when reading the data files.
+All entries are considered mandatory.
 
 
 | type    | name                        | example
@@ -61,17 +62,20 @@ Coordinated data for all mesh, fields and cloud information.
 
 Basic information that applies to mesh and field information.
 
-| type      | name                          | example
-|-----------|-------------------------------|--------
-| string    | region0/name                  | "region0"
-| integer   | region0/npatches              | 3
-| string    | region0/patch0/name           | "movingWall"
-| string    | region0/patch0/type           | "wall"
-| string    | region0/patch1/name           | "fixedWalls"
-| string    | region0/patch1/type           | "wall"
-| string    | region0/patch2/name           | "frontAndBack"
-| string    | region0/patch2/type           | "empty"
-|           | region1/...                   |
+| type    | name                        | comment
+|---------|-----------------------------|--------
+| int     | \<regionName\>/nPatches     | number of patches
+| string[]| \<regionName\>/patch-names  | patch names
+| string[]| \<regionName\>/patch-types  | patch types
+
+#### Example
+
+| type    | name                        | example
+|---------|-----------------------------|--------
+| int     | region0/nPatches            | 3
+| string[]| region0/patch-names         | {"movingWall", "fixedWalls", "frontAndBack"}
+| string[]| region0/patch-types         | {"wall", "wall", "empty" }
+|         | solid/...                   |
 
 
 ### Meshes
@@ -82,26 +86,24 @@ also true.
 #### Global Array Variables
 
 
-| type      | name                          | comment
-|-----------|-------------------------------|-------------
-| integer   | region0/polyMesh/nPoints      | per processor
-| integer   | region0/polyMesh/nCells       | per processor
-| integer   | region0/polyMesh/nFaces       | per processor
-| integer   | region0/polyMesh/nInternalFaces | per processor
-|           | region1/...                   |
+| type    | name                                | comment
+|---------|-------------------------------------|-------------
+| int     | \<regionName\>/polyMesh/nPoints     | per processor
+| int     | \<regionName\>/polyMesh/nCells      | per processor
+| int     | \<regionName\>/polyMesh/nFaces      | per processor
+| int     | \<regionName\>/polyMesh/nInternalFaces  | per processor
 
 
 #### Localized Variables
 
-| type      | name                           | comment
-|-----------|--------------------------------|-------------
-| double    | region0/polyMesh/points        | {nPoints x 3}
-| integer   | region0/polyMesh/faces/indices | indices for compact faceList
-| integer   | region0/polyMesh/faces/content | content for compact faceList
-| integer   | region0/polyMesh/owner         | face owners
-| integer   | region0/polyMesh/neighbour     | face neighbours
-| byte      | region0/polyMesh/boundary      | boundary mesh information
-|           | region1/...                    |
+| type    | name                                  | comment
+|---------|---------------------------------------|-------------
+| double  | \<regionName\>/polyMesh/points        | {nPoints x 3}
+| int     | \<regionName\>/polyMesh/faces/indices | indices for compact faceList
+| int     | \<regionName\>/polyMesh/faces/content | content for compact faceList
+| int     | \<regionName\>/polyMesh/owner         | face owners
+| int     | \<regionName\>/polyMesh/neighbour     | face neighbours
+| byte    | \<regionName\>/polyMesh/boundary      | boundary mesh information
 
 
 ### Fields
@@ -109,53 +111,60 @@ also true.
 
 #### Localized Variables
 
-| type      | name                           | comment
-|-----------|--------------------------------|-------------
-| byte      | region0/field/p                |
-| byte      | region0/field/U                |
-|           | ...
+| type    | name                                | comment
+|---------|-------------------------------------|-------------
+| byte    | \<regionName\>/field/p              |
+| byte    | \<regionName\>/field/U              |
+|         | ...
 
 
 #### Attributes
 
-| type      | name                           | example
-|-----------|--------------------------------|-------------
-| string    | region0/field/p/class          | "volScalarField"
-| string    | region0/field/p/patch0/type    | "zeroGradient"
-| string    | region0/field/p/patch1/type    | "zeroGradient"
-| string    | region0/field/p/patch2/type    | "empty"
-| string    | region0/field/U/class          | "volVectorField"
-| string    | region0/field/U/patch0/type    | "fixedValue"
-| string    | region0/field/U/patch1/type    | "fixedValue"
-| string    | region0/field/U/patch2/type    | "empty"
-|           | ...
+| type    | name                                | example
+|---------|-------------------------------------|-------------
+| string  | \<regionName\>/field/p/class        | "volScalarField"
+| string[]| \<regionName\>/field/p/patch-types  | { "zeroGradient", "zeroGradient", "empty" }
+| string  | \<regionName\>/field/U/class        | "volVectorField"
+| string[]| \<regionName\>/field/U/patch-types  | {"fixedValue", "fixedValue", "empty"}
+|         | ...
 
 
 ### Clouds
+
+These entries are only available when the region also has any active
+cloud information. A missing value of `nClouds` is equivalent to `nClouds=0`.
 
 For efficiency, the parcel contents are stored directly as a binary
 *blob*. The meaning of the binary content can be reconstructed
 from its list of names and types.
 
-#### Global Array Variables
+#### Region Cloud Attributes
 
-| type      | name                           | comment
-|-----------|--------------------------------|-------------
-| integer   | region0/cloud0/nParticle       | per processor
-| byte      | region0/cloud0/\_\_blob\_\_    | {nParticle x Blob-size}
+| type    | name                        | comment
+|---------|-----------------------------|-------------
+| int     | \<regionName\>/nClouds      | number of associated clouds in region
+| string[]| \<regionName\>/clouds       | {"name0", "name1", ...}
+
+
+#### Cloud Variables (Globally-addressable)
+
+| type    | name                           | comment
+|---------|--------------------------------|-------------
+| byte    | \<regionName\>/cloud/\<cloudName\> | {nParticle x Blob-size}
+| int     | \<regionName\>/cloud/\<cloudName\>/nParticle | per processor
+
 
 #### Cloud Attributes
 
-| type      | name                           | example
-|-----------|--------------------------------|-------------
-| integer   | region0/nClouds                | 1
-| string    | region0/cloud0/class           | "kinematicCloud"
-| string    | region0/cloud0/name            | "kinematicCloud"
-| integer   | region0/cloud0/nParticle       | 3000 (total count)
-| char*[]   | region0/cloud0/\_\_blob\_\_/names  | {"position", "cellI", "faceI", "stepFraction", "tetFaceI", "tetPtI", "origProc", "origId", "active", "typeId", "nParticle", "d", "dTarget", "U", "rho", "age", "tTurb", "UTurb"}
-| char*[]   | region0/cloud0/\_\_blob\_\_/types  | {"vector", "label", "label", "scalar", "label", "label", "label", "label", "label", "label", "scalar", "scalar", "scalar", "vector", "scalar", "scalar", "scalar", "vector"}
-| integer   | region0/cloud0/\_\_blob\_\_/offset | {0, 24, 28, 32, 40, 44, 48, 52, 56, 60, 64, 72, 80, 88, 112, 120, 128, 136}
-| integer   | region0/cloud0/\_\_blob\_\_/byte-size | {24, 4, 4, 8, 4, 4, 4, 4, 4, 4, 8, 8, 8, 24, 8, 8, 8, 24}
+| type    | name                           | example
+|---------|--------------------------------|-------------
+| int     | \<regionName\>/cloud/\<cloudName\>/nParticle | total count (sum of corresponding variable)
+| string  | \<regionName\>/cloud/\<cloudName\>/class  | "kinematicCloud"
+| int     | \<regionName\>/cloud/\<cloudName\>/size   | 160 (bytes)
+| string[]| \<regionName\>/cloud/\<cloudName\>/names  | {"position", "cellI", "faceI", "stepFraction", "tetFaceI", "tetPtI", "origProc", "origId", "active", "typeId", "nParticle", "d", "dTarget", "U", "rho", "age", "tTurb", "UTurb"}
+| string[]| \<regionName\>/cloud/\<cloudName\>/types  | {"vector", "label", "label", "scalar", "label", "label", "label", "label", "label", "label", "scalar", "scalar", "scalar", "vector", "scalar", "scalar", "scalar", "vector"}
+| int[]   | \<regionName\>/cloud/\<cloudName\>/offset | {0, 24, 28, 32, 40, 44, 48, 52, 56, 60, 64, 72, 80, 88, 112, 120, 128, 136}
+| int[]   | \<regionName\>/cloud/\<cloudName\>/byte-size | {24, 4, 4, 8, 4, 4, 4, 4, 4, 4, 8, 8, 8, 24, 8, 8, 8, 24}
 
 
 ---

@@ -145,12 +145,8 @@ bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo
         //basicKinematicCloud *q =(basicKinematicCloud*) &cloud;
         basicKinematicCloud *q = reinterpret_cast<basicKinematicCloud*>(&cloud);
 
-        fileName varPath
-        (
-            "region" + Foam::name(rInfo.index_)
-          / "clouds" / rInfo.cloudNames_[cloudI]
-        );
-        fileName datasetName(varPath/"nParticlesPerProc");
+        fileName varPath = rInfo.cloudPath(rInfo.cloudNames_[cloudI]);
+        fileName datasetName(varPath/"nParticle");
 
         // Get the number of particles saved by this rank
         int nparts = 0;
@@ -188,22 +184,22 @@ bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo
 
         if (!ok) break;
 
-        // Read into a plain continuous array for the data
-        // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer reads
-        int labelData[nparts];
-
-        // Read original processor ID
-        if (findStrings(rInfo.cloudAttribs_, "origProc"))
-        {
-            Info<< "      dataset origProc " << endl;
-            ok = helper.getDataSet(varPath/"origProc", labelData);
-            label i = 0;
-            forAllIter(basicKinematicCloud, *q, pIter)
-            {
-                pIter().origProc() = labelData[i++];
-            }
-        }
-
+////        // Read into a plain continuous array for the data
+////        // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer reads
+////        int labelData[nparts];
+////
+////        // Read original processor ID
+////        if (findStrings(rInfo.cloudAttribs_, "origProc"))
+////        {
+////            Info<< "      dataset origProc " << endl;
+////            ok = helper.getDataSet(varPath/"origProc", labelData);
+////            label i = 0;
+////            forAllIter(basicKinematicCloud, *q, pIter)
+////            {
+////                pIter().origProc() = labelData[i++];
+////            }
+////        }
+////
         if (!ok) break;
     }
 

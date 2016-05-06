@@ -94,7 +94,7 @@ Foam::label Foam::adiosWrite::regionInfo::appendFieldGroup
     {
         WarningInFunction
             << "Field type " << fieldType
-            << "of the field " << fieldName
+            << " of the field " << fieldName
             << " is not handled by adiosWrite."
             << endl;
     }
@@ -111,7 +111,7 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
     label nFields = 0;
     wordList allFields = mesh.sortedNames();
 
-    Info<< "  region " << info() << endl;
+    Info<< "  " << info() << endl;
 
     clearFields(); // clear it because we will add all of them again and again
 

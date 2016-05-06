@@ -62,13 +62,20 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 //         }
 //     }
 
+    stringList cloudsUsed(r.cloudNames_.size());
+
     label nClouds = 0;
     forAll(r.cloudNames_, cloudI)
     {
-        Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
+        const string& cloudName = cloudsUsed[cloudI];
+        const fileName varPath = r.cloudPath(cloudName);
+
+        const word cloudType = mesh.find(cloudName)()->type();
+
+        Info<< "    cloud: " << cloudName << endl;
 
         const kinematicCloud& cloud =
-            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+            mesh.lookupObject<kinematicCloud>(cloudName);
 
         const basicKinematicCloud& q =
             static_cast<const basicKinematicCloud&>(cloud);
@@ -87,17 +94,17 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         // If the cloud contains no particles, jump to the next cloud
         if (r.nTotalParticles_ == 0)
         {
-            Info<< "    " << r.cloudNames_[cloudI]
+            Info<< "    " << cloudName
                 <<": No particles in cloud. Skipping definition."
                 << endl;
 
             continue;
         }
 
-        const fileName varPath = r.cloudPath(nClouds++);
+        cloudsUsed[nClouds++] = cloudName;
 
-        defineAttribute("class", varPath, cloud.type());  // cloud type
-        defineAttribute("name",  varPath, q.name());      // cloud name
+        // cloud type
+        defineAttribute("class", varPath, cloudType);
 
         // total number of particles as an attribute
         defineIntAttribute("nParticle", varPath, r.nTotalParticles_);
@@ -148,15 +155,13 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
         {
             // stream contents
-            const fileName varName = varPath/"__blob__";
-
             const string localBlob  = localDims  + "," + Foam::name(blob.byteSize());
             const string globalBlob = globalDims + "," + Foam::name(blob.byteSize());
 
             adios_define_var
             (
                 groupID_,
-                varName.c_str(),                // name
+                varPath.c_str(),                // name
                 NULL,                           // path (deprecated)
                 adios_unsigned_byte,            // data-type
                 localBlob.c_str(),              // local dimensions
@@ -169,10 +174,11 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
             outputSize_ += bufLen;
 
-            defineListAttribute("names",     varName, blob.names());
-            defineListAttribute("types",     varName, blob.types());
-            defineListAttribute("offset",    varName, blob.offsets());
-            defineListAttribute("byte-size", varName, blob.byteSizes());
+            defineIntAttribute("size",       varPath, blob.byteSize());
+            defineListAttribute("names",     varPath, blob.names());
+            defineListAttribute("types",     varPath, blob.types());
+            defineListAttribute("offset",    varPath, blob.offsets());
+            defineListAttribute("byte-size", varPath, blob.byteSizes());
         }
 
         // additional output
@@ -259,10 +265,13 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
     if (nClouds)
     {
-        const fileName varName = r.regionPath();
+        cloudsUsed.setSize(nClouds);
+
+        const fileName varPath = r.regionPath();
 
         // number of active clouds as region attribute
-        defineIntAttribute("nClouds", varName, nClouds);
+        defineIntAttribute("nClouds", varPath, nClouds);
+        defineListAttribute("clouds", varPath, cloudsUsed);
     }
 
     return maxLen;
@@ -277,10 +286,12 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
     DynamicList<label> labelBuffer;
     DynamicList<scalar> scalarBuffer;
 
-    label nClouds = 0;
     forAll(r.cloudNames_, cloudI)
     {
-        Info<< "    cloud: " << r.cloudNames_[cloudI] << endl;
+        const string& cloudName = r.cloudNames_[cloudI];
+        const fileName varPath = r.cloudPath(cloudName);
+
+        Info<< "    cloud: " << cloudName << endl;
         Info<< "    Properties " <<  basicKinematicCloud::particleType::propertyList() << endl;
 
         // If the cloud contains no particles, jump to the next cloud
@@ -290,14 +301,13 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         }
 
         const kinematicCloud& cloud =
-            mesh.lookupObject<kinematicCloud>(r.cloudNames_[cloudI]);
+            mesh.lookupObject<kinematicCloud>(cloudName);
+
         const basicKinematicCloud& q =
             static_cast<const basicKinematicCloud&>(cloud);
 
         // Number of particles on this process
         const label myParticles = q.size();
-
-        const fileName varPath = r.cloudPath(nClouds++);
 
         // number of particles per processor as a field
         writeIntVariable(varPath/"nParticle", myParticles);
@@ -312,7 +322,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
             }
         }
 
-        writeVariable(varPath/"__blob__", iobuffer_);
+        writeVariable(varPath, iobuffer_);
 
         labelBuffer.reserve(myParticles);
         scalarBuffer.reserve(3*myParticles);

@@ -52,8 +52,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 
 void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 {
-    Info<< "  adiosWrite::fieldWrite: region "
-        << rInfo.index_ << "=" << rInfo.name_ << endl;
+    Info<< "  adiosWrite::fieldWrite: " << rInfo.info() << endl;
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 

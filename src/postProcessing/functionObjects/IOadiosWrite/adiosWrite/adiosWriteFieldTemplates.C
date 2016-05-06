@@ -51,13 +51,7 @@ size_t Foam::adiosWrite::fieldDefine
         const typename FieldType::GeometricBoundaryField& bfield =
             field.boundaryField();
 
-        fileName varPath = rInfo.fieldPath(fields[fieldI]);
-
-        os.rewind();
-        os << field;
-
-        bufLen = defineStreamVariable(varPath, os.size());
-        maxLen = Foam::max(maxLen, bufLen);
+        const fileName varPath = rInfo.fieldPath(fields[fieldI]);
 
         // volScalarField etc.
         defineAttribute("class", varPath, field.type());
@@ -66,14 +60,24 @@ size_t Foam::adiosWrite::fieldDefine
         // if needed to save parsing
 
         // independent of how we store fields,
-        // a quick lookup of field patch types could prove useful
+        // a quick lookup of field patch types may prove useful
+        stringList pTypes(bfield.size());
+
         forAll(bfield, patchI)
         {
             const typename FieldType::PatchFieldType& pf = bfield[patchI];
-            fileName patchPath = varPath/"patch" + Foam::name(patchI);
 
-            defineAttribute("type", patchPath, pf.type());
+            pTypes[patchI] = pf.type();
         }
+
+        defineListAttribute("patch-types", varPath, pTypes);
+
+        os.rewind();
+        os << field;
+
+        bufLen = defineStreamVariable(varPath, os.size());
+        maxLen = Foam::max(maxLen, bufLen);
+
     }
 
     Pout<< "max stream-size: " << maxLen << endl;
@@ -95,8 +99,7 @@ void Foam::adiosWrite::fieldWrite
         // Lookup field
         const FieldType& field = mesh.lookupObject<FieldType>(fields[fieldI]);
 
-        fileName varPath = rInfo.fieldPath(fields[fieldI]);
-
+        const fileName varPath = rInfo.fieldPath(fields[fieldI]);
         Info<< "    fieldWrite: " << varPath << endl;
         {
             OutputBufStreamer os(iobuffer_, adiosCore::strFormat);
