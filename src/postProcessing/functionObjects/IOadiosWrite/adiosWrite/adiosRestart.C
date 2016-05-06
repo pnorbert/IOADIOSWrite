@@ -191,8 +191,6 @@ bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo
         // Read into a plain continuous array for the data
         // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer reads
         int labelData[nparts];
-        // Allocate memory for 1-comp. dataset of type 'float/double' for reads
-        //ioScalar scalarData[nparts];
 
         // Read original processor ID
         if (findStrings(rInfo.cloudAttribs_, "origProc"))

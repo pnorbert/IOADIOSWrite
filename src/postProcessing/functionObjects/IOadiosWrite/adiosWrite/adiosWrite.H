@@ -56,13 +56,6 @@ Author
 #include "adios_read.h"
 
 /**
- * write cloud fields via explicit definition
- * poor prospects for restart
- */
-// #define FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
-// #undef  FOAM_ADIOS_CLOUD_EXPLICIT_NAMES
-
-/**
  * expand the particle information into separate fields
  * useful for debugging
  */
@@ -612,25 +605,6 @@ protected:
 
             //- Cloud write wrapper
             void cloudWrite(const regionInfo&);
-
-            //- Cloud define wrapper
-            size_t cloudDefineExplicit(regionInfo&);
-
-            //- Cloud write wrapper
-            void cloudWriteExplicit(const regionInfo&);
-
-            //- Write attributes for cloud particles
-            void cloudWriteAttrib
-            (
-                label myParticles,
-                label offset,
-                label nTot,
-                label nCmps,
-                void* databuf,
-                char* datasetName,
-                ioScalar attrType
-            );
-
 
         // Functions for handling mesh
 
