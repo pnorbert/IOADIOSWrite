@@ -40,6 +40,11 @@ License
 void Foam::adiosReader::helper::scan(bool verbose)
 {
     maxLen = 0;
+    variables.clear();
+    attributes.clear();
+
+    regionNames_.clear();
+    cloudNames_.clear();
 
     if (!file)
     {
@@ -52,12 +57,95 @@ void Foam::adiosReader::helper::scan(bool verbose)
 
     if (verbose)
     {
-        Info<< "adios-file has " << file->nvars << " variables" << endl;
+        Info<< "adios-file has " << file->nvars << " variables and "
+            << file->nattrs << " attributes" << endl;
     }
 
-    for (int varI=0; varI < file->nvars; ++varI)
+
+    // attributes:
+    // hash as (name => lookup index)
+    for (int i=0; i < file->nattrs; ++i)
     {
-        maxLen = Foam::max(maxLen, sizeOf(file->var_namelist[varI]));
+        const char* attrName = file->attr_namelist[i];
+        attributes.insert(attrName, i);
+
+        if (verbose)
+        {
+            Info<< "attribute: " << attrName << endl;
+        }
+    }
+
+    // variable:
+    // hash as (name => nbytes on this process)
+    for (int i=0; i < file->nvars; ++i)
+    {
+        const char* varName = file->var_namelist[i];
+
+        size_t varsize = sizeOf(varName);
+        variables.insert(varName, varsize);
+
+        maxLen = Foam::max(maxLen, varsize);
+
+        if (verbose)
+        {
+            Info<< "variable: " << varName << endl;
+        }
+    }
+
+
+    // mandatory: /openfoam/nRegions - but can also just rely on region names
+
+    // mandatory: /openfoam/regions
+    regionNames_ = getStringListAttribute<word>
+    (
+        adiosCore::foamAttribute/"regions"
+    );
+
+    // optional: regionName/nClouds, regionName/clouds
+    forAll(regionNames_, regI)
+    {
+        const word& regName = regionNames_[regI];
+
+        wordList names;
+        if
+        (
+            readStringListAttributeIfPresent(regName/"clouds", names)
+         && names.empty()
+        )
+        {
+            cloudNames_.insert(regName, names);
+        }
+    }
+
+    // for diagnostics: expect these type of entries
+    // regionName/cloudName/nParticle
+    // regionName/cloudName/size
+    // regionName/cloudName/names
+    // regionName/cloudName/types
+    // regionName/cloudName/offset
+    // regionName/cloudName/byte-size
+    forAll(regionNames_, regI)
+    {
+        const word& regName = regionNames_[regI];
+        if (cloudNames_.found(regName))
+        {
+            const wordList& cloudNames = cloudNames_[regName];
+
+            forAll(cloudNames, cloudI)
+            {
+                fileName varPath = regName/"cloud"/cloudNames[cloudI];
+                label nTotal = getIntAttribute(varPath/"nParticle");
+                label nBytes = getIntAttribute(varPath/"size");
+
+                wordList fragName = getStringListAttribute<word>(varPath/"names");
+                wordList fragType = getStringListAttribute<word>(varPath/"types");
+
+                labelList fragOff  = getIntListAttribute(varPath/"offset");
+                labelList fragSize = getIntListAttribute(varPath/"byte-size");
+            }
+
+            // cloudNames_.insert(regName, names);
+        }
     }
 
     if (verbose)
@@ -241,7 +329,7 @@ size_t Foam::adiosReader::helper::sizeOf
 
 size_t Foam::adiosReader::helper::sizeOf
 (
-    const fileName& datasetName,
+    const string& datasetName,
     bool verbose
 )
 {
@@ -251,7 +339,7 @@ size_t Foam::adiosReader::helper::sizeOf
 
 bool Foam::adiosReader::helper::getDataSet
 (
-    const fileName& datasetName
+    const string& datasetName
 )
 {
     // is.name() = Foam::name(Pstream::myProcNo()) / datasetName;
@@ -274,7 +362,7 @@ bool Foam::adiosReader::helper::getDataSet
 
 bool Foam::adiosReader::helper::getDataSet
 (
-    const fileName& datasetName,
+    const string& datasetName,
     void* data
 )
 {
@@ -319,7 +407,223 @@ void Foam::adiosReader::helper::close()
         file = NULL;
     }
 
+    attributes.clear();
+    variables.clear();
+
+    regionNames_.clear();
+    cloudNames_.clear();
+
     maxLen = 0;
+}
+
+
+bool Foam::adiosReader::helper::readIntAttributeIfPresent
+(
+    const string& attrName,
+    label &value
+) const
+{
+    enum ADIOS_DATATYPES type = adios_unknown;
+    int  size = 0;
+    void *data = 0;
+
+    bool ok =
+    (
+        attributes.found(attrName)
+     && 0 ==
+        adios_get_attr_byid
+        (
+            file,
+            attributes[attrName],
+            &type,
+            &size,
+            &data
+        )
+    );
+
+    if (ok)
+    {
+        if (type == adios_integer)
+        {
+            size /= sizeof(int);
+            ok = (size == 1);
+
+            if (ok)
+            {
+                value = *(reinterpret_cast<int*>(data));
+            }
+        }
+        else if (type == adios_unsigned_integer)
+        {
+            size /= sizeof(unsigned int);
+            ok = (size == 1);
+
+            if (ok)
+            {
+                value = *(reinterpret_cast<unsigned int*>(data));
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (data)
+        {
+            free(data);
+        }
+
+        if (!ok)
+        {
+            if (size)
+            {
+                FatalErrorInFunction
+                    << "too many elements for attribute: " << attrName << nl
+                    << "  expecting 1 int/unsigned, found " << size
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for attribute: " << attrName << nl
+                    << "  expecting int/unsigned, found "
+                    << adios_type_to_string(type)
+                        << exit(FatalIOError);
+            }
+        }
+    }
+
+    return ok;
+}
+
+
+bool Foam::adiosReader::helper::readIntListAttributeIfPresent
+(
+    const string& attrName,
+    List<label>& lst
+) const
+{
+    enum ADIOS_DATATYPES type = adios_unknown;
+    int  size = 0;
+    void *data = 0;
+
+    bool ok =
+    (
+        attributes.found(attrName)
+     && 0 ==
+        adios_get_attr_byid
+        (
+            file,
+            attributes[attrName],
+            &type,
+            &size,
+            &data
+        )
+    );
+
+    if (ok)
+    {
+        if (type == adios_integer)
+        {
+            size /= sizeof(int);
+            ok = (size > 1);
+
+            if (ok)
+            {
+                int *ptr = reinterpret_cast<int*>(data);
+
+                lst.setSize(size);
+                for (int i=0; i < size; ++i)
+                {
+                    lst[i] = ptr[i];
+                }
+            }
+        }
+        else if (type == adios_unsigned_integer)
+        {
+            size /= sizeof(unsigned int);
+            ok = (size > 1);
+
+            if (ok)
+            {
+                unsigned int* ptr = reinterpret_cast<unsigned int*>(data);
+
+                lst.setSize(size);
+                for (int i=0; i < size; ++i)
+                {
+                    lst[i] = ptr[i];
+                }
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (data)
+        {
+            free(data);
+        }
+
+        if (!ok)
+        {
+            if (size == 1)
+            {
+                FatalErrorInFunction
+                    << "too few elements for attribute: " << attrName << nl
+                    << "  expecting multiple int/unsigned values, found 1"
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for attribute: " << attrName << nl
+                    << "  expecting int/unsigned, found "
+                    << adios_type_to_string(type)
+                        << exit(FatalIOError);
+            }
+        }
+    }
+
+    return ok;
+}
+
+
+Foam::label Foam::adiosReader::helper::getIntAttribute
+(
+    const string& attrName
+) const
+{
+    label value;
+
+    if (!readIntAttributeIfPresent(attrName, value))
+    {
+        FatalErrorInFunction
+            << "integer attribute missing: " << attrName
+            << exit(FatalIOError);
+    }
+
+    return value;
+}
+
+
+Foam::List<Foam::label> Foam::adiosReader::helper::getIntListAttribute
+(
+    const string& attrName
+) const
+{
+    List<label> value;
+
+    if (!readIntListAttributeIfPresent(attrName, value))
+    {
+        FatalErrorInFunction
+            << "int-list attribute missing: " << attrName
+            << exit(FatalIOError);
+    }
+
+    return value;
 }
 
 

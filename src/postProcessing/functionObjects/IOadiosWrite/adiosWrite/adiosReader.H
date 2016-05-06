@@ -39,6 +39,8 @@ SourceFiles
 #include "DynamicCharList.H"
 #include "HashTable.H"
 
+#include "Ostream.H"
+
 #include "adios.h"
 #include "adios_read.h"
 
@@ -72,6 +74,13 @@ public:
         ADIOS_SELECTION *selection;
         size_t maxLen;
 
+        // simple hash of attributes names and their internal position (on read)
+        HashTable<int, fileName> attributes;
+
+        HashTable<size_t, fileName> variables;
+
+        wordList regionNames_;
+        HashTable<wordList> cloudNames_;   // per region
 
         helper(const DynamicCharList&);
 
@@ -88,19 +97,56 @@ public:
 
         //- Return the number of bytes associated with the dataset
         //  Values are for the current processor.
-        size_t sizeOf(const fileName& datasetName, bool verbose=false);
+        size_t sizeOf(const string& datasetName, bool verbose=false);
 
         //- Retrieve named dataset into our buffer area
         //  On success the buffer is resized according to the data.
         //  On failure the buffer is resized to zero.
-        bool getDataSet(const fileName& datasetName);
+        bool getDataSet(const string& datasetName);
 
         //- Retrieve named dataset directly into the memory specified
-        bool getDataSet(const fileName& datasetName, void* data);
+        bool getDataSet(const string& datasetName, void* data);
 
         void scan(bool verbose=false);
 
         void close();
+
+        //- Read integer attribute if it exists
+        bool readIntAttributeIfPresent
+        (
+            const string& attrName,
+            label &value
+        ) const;
+
+
+        //- Read string-list attribute if it exists
+        bool readIntListAttributeIfPresent
+        (
+            const string& attrName,
+            List<label>& lst
+        ) const;
+
+
+        //- Get a mandatory integer attribute
+        label getIntAttribute(const string& attrName) const;
+
+
+        //- Get a mandatory integer list attribute
+        List<label> getIntListAttribute(const string& attrName) const;
+
+
+        //- Read string-list attribute if it exists
+        template<class StringType>
+        bool readStringListAttributeIfPresent
+        (
+            const string& attrName,
+            List<StringType>& lst
+        ) const;
+
+
+        //- Get a mandatory integer attribute
+        template<class StringType>
+        List<StringType> getStringListAttribute(const string& attrName) const;
 
     };
 
@@ -110,6 +156,12 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#ifdef NoRepository
+    #include "adiosReaderTemplates.C"
+#endif
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
