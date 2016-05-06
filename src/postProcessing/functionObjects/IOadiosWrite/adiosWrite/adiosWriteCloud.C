@@ -42,35 +42,34 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
 
-    // HashTable<const cloud*> allClouds = mesh.lookupClass<cloud>();
-
-    // Info<< cloud.type() << endl;
-    // Info<<"clouds: " << allClouds << endl;
-
-//     forAllConstIter(HashTable<const cloud*>, allClouds, iter)
-//     {
-//         Info<<"  cloud=" << (*iter)->name() << endl;
-//         Info<<"  class=" << (*iter)->type() << endl;
-//
-//         if (isA<reactingCloud>(*(*iter)))
-//         {
-//             Info<<"  reacting-cloud YES\n";
-//         }
-//         else
-//         {
-//             Info<<"  reacting-cloud NO\n";
-//         }
-//     }
-
-    stringList cloudsUsed(r.cloudNames_.size());
+    HashTable<const cloud*> allClouds = mesh.lookupClass<cloud>();
 
     label nClouds = 0;
-    forAll(r.cloudNames_, cloudI)
-    {
-        const string& cloudName = cloudsUsed[cloudI];
-        const fileName varPath = r.cloudPath(cloudName);
+    SortableList<string> cloudsUsed(r.cloudNames_.size());
 
-        const word cloudType = mesh.find(cloudName)()->type();
+    forAllConstIter(HashTable<const cloud*>, allClouds, iter)
+    {
+        const string& cloudName = (*iter)->name();
+        // const string& cloudType = (*iter)->type();
+
+        if (findStrings(r.cloudNames_, cloudName))
+        {
+            cloudsUsed[nClouds++] = cloudName;
+        }
+    }
+
+    cloudsUsed.setSize(nClouds);
+    cloudsUsed.sort();
+
+    r.cloudInfo_.clear();
+
+    forAll(cloudsUsed, cloudI)
+    {
+        cloudInfo cInfo(cloudsUsed[cloudI]);
+
+        const word&   cloudName = cInfo.name();
+        const word    cloudType = mesh.find(cloudName)()->type();
+        const fileName  varPath = r.cloudPath(cInfo);
 
         Info<< "    cloud: " << cloudName << endl;
 
@@ -81,19 +80,13 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             static_cast<const basicKinematicCloud&>(cloud);
 
         // Number of particles on this process
-        const label myParticles = q.size();
+        const label nParticle = q.size();
 
-        // Find the number of particles on each process
-        r.nParticles_[Pstream::myProcNo()] = myParticles;
-        Pstream::gatherList(r.nParticles_);
-        Pstream::scatterList(r.nParticles_);
-
-        // Sum total number of particles on all processes
-        r.nTotalParticles_ = sum(r.nParticles_);
-
-        // If the cloud contains no particles, jump to the next cloud
-        if (r.nTotalParticles_ == 0)
+        // The number of particles on each process and the total
+        // on all processes
+        if (cInfo.nParticle(nParticle) == 0)
         {
+            // skip: cloud has no particles
             Info<< "    " << cloudName
                 <<": No particles in cloud. Skipping definition."
                 << endl;
@@ -101,13 +94,13 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             continue;
         }
 
-        cloudsUsed[nClouds++] = cloudName;
+        r.cloudInfo_.append(cInfo);
 
         // cloud type
         defineAttribute("class", varPath, cloudType);
 
         // total number of particles as an attribute
-        defineIntAttribute("nParticle", varPath, r.nTotalParticles_);
+        defineIntAttribute("nParticle", varPath, cInfo.nTotal());
 
         // number of particles per processor as a field
         defineIntVariable(varPath/"nParticle");
@@ -115,7 +108,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         // determine blob sizes
 
         List<label> blobSize(Pstream::nProcs(), 0);
-        if (myParticles)
+        if (nParticle)
         {
             ORawCountStream os;  // always raw binary content
             os << *(q.first());
@@ -124,7 +117,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         Pstream::gatherList(blobSize);
         Pstream::scatterList(blobSize);
 
-        Info<< "particles: " << r.nParticles_ << endl;
+        Info<< "particles: " << cInfo.nTotal() << endl;
         Info<< "blob-size: " << blobSize << endl;
 
         ParticleBinaryBlob blob
@@ -138,16 +131,11 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
             << blob.types() << nl << blob.names() << endl;
 
         // common - local offset value
-        label localOffset = 0;
-        for (label procI=1; procI < Pstream::nProcs(); ++procI)
-        {
-            localOffset += r.nParticles_[procI-1];
-        }
-        const string offsetDims = Foam::name(localOffset);
+        const string offsetDims = Foam::name(cInfo.offset());
 
         // for scalars
-        const string localDims  = Foam::name(myParticles);
-        const string globalDims = Foam::name(r.nTotalParticles_);
+        const string localDims  = Foam::name(nParticle);
+        const string globalDims = Foam::name(cInfo.nTotal());
 
         // for vectors
         const string localDims3  = localDims  + ",3";
@@ -169,7 +157,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
                 offsetDims.c_str()              // local offsets
             );
 
-            bufLen = myParticles * blob.byteSize();
+            bufLen = nParticle * blob.byteSize();
             maxLen = Foam::max(maxLen, bufLen);
 
             outputSize_ += bufLen;
@@ -255,7 +243,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         }
 #endif /* FOAM_ADIOS_CLOUD_EXPAND */
 
-        outputSize_ += myParticles *
+        outputSize_ += nParticle *
         (
             nLabels    * adiosTraits<label>::adiosSize
           + nScalars   * adiosTraits<scalar>::adiosSize
@@ -263,14 +251,20 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         );
     }
 
+    nClouds = r.cloudInfo_.size();
     if (nClouds)
     {
         cloudsUsed.setSize(nClouds);
+        nClouds = 0;
+        forAllConstIter(SLList<cloudInfo>, r.cloudInfo_, iter)
+        {
+            cloudsUsed[nClouds++] = iter().name();
+        }
 
         const fileName varPath = r.regionPath();
 
         // number of active clouds as region attribute
-        defineIntAttribute("nClouds", varPath, nClouds);
+        defineIntAttribute("nClouds", varPath, cloudsUsed.size());
         defineListAttribute("clouds", varPath, cloudsUsed);
     }
 
@@ -286,16 +280,17 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
     DynamicList<label> labelBuffer;
     DynamicList<scalar> scalarBuffer;
 
-    forAll(r.cloudNames_, cloudI)
+    forAllConstIter(SLList<cloudInfo>, r.cloudInfo_, iter)
     {
-        const string& cloudName = r.cloudNames_[cloudI];
+        const cloudInfo& cInfo = iter();
+        const word&  cloudName = cInfo.name();
         const fileName varPath = r.cloudPath(cloudName);
 
         Info<< "    cloud: " << cloudName << endl;
         Info<< "    Properties " <<  basicKinematicCloud::particleType::propertyList() << endl;
 
         // If the cloud contains no particles, jump to the next cloud
-        if (r.nTotalParticles_ == 0)
+        if (cInfo.nTotal() == 0)
         {
             continue;
         }
@@ -307,10 +302,10 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
             static_cast<const basicKinematicCloud&>(cloud);
 
         // Number of particles on this process
-        const label myParticles = q.size();
+        const label nParticle = q.size();
 
         // number of particles per processor as a field
-        writeIntVariable(varPath/"nParticle", myParticles);
+        writeIntVariable(varPath/"nParticle", nParticle);
 
         // stream contents
         {
@@ -324,14 +319,14 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 
         writeVariable(varPath, iobuffer_);
 
-        labelBuffer.reserve(myParticles);
-        scalarBuffer.reserve(3*myParticles);
+        labelBuffer.reserve(nParticle);
+        scalarBuffer.reserve(3*nParticle);
 
         // buffer for 'label'
-        labelBuffer.setSize(myParticles);
+        labelBuffer.setSize(nParticle);
 
         // buffer for 'vector'
-        scalarBuffer.setSize(3*myParticles);
+        scalarBuffer.setSize(3*nParticle);
 
         // Write slip velocity Us = U - Uc
         {
@@ -357,8 +352,8 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         // with particle blobs
 
         // walk the blob framents
-        labelBuffer.reserve(myParticles);
-        scalarBuffer.reserve(3*myParticles);
+        labelBuffer.reserve(nParticle);
+        scalarBuffer.reserve(3*nParticle);
 
         ParticleBinaryBlob blob
         (
@@ -369,8 +364,8 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         List<char> blobBuffer(blob.byteSize() + 32); // extra generous
         ORawBufStream osblob(blobBuffer);
 
-        labelBuffer.setSize(myParticles);
-        scalarBuffer.setSize(3*myParticles);
+        labelBuffer.setSize(nParticle);
+        scalarBuffer.setSize(3*nParticle);
 
         forAllConstIter(SLList<ParticleBinaryBlob::Fragment>, blob, iter)
         {

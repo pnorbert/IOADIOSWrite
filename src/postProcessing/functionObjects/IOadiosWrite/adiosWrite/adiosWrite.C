@@ -73,9 +73,6 @@ void Foam::adiosWrite::regionInfo::read
         dict.lookup("cloudAttribs") >> cloudAttribs_;
     }
 
-    // Set length of particle numbers array
-    nParticles_.setSize(Pstream::nProcs());
-
     // Do a basic check to see if the objectNames_ is accessible
 
     DynamicList<word> missingObjects(objectNames_.size());

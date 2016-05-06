@@ -105,6 +105,96 @@ protected:
         };
 
         // Per-region info variables grouped together to be able to create a list of them
+        class cloudInfo
+        {
+            //- Name of the cloud
+            word name_;
+
+            //- Total number of particles (sum of nParticle_ list)
+            label nTotal_;
+
+            //- Array containing number of particles per process (often used list)
+            List<label> nParticle_;
+
+        public:
+
+            //- Construct null
+            cloudInfo(const word& name)
+            :
+               name_(name),
+               nTotal_(0),
+               nParticle_(Pstream::nProcs())
+            {
+                reset();
+            }
+
+            ~cloudInfo() {}
+
+
+            //- Name of the cloud
+            const word& name() const
+            {
+                return name_;
+            }
+
+
+            //- Total number of particles across all processes
+            label nTotal() const
+            {
+                return nTotal_;
+            }
+
+
+            //- The number of particles on this process
+            label nParticle() const
+            {
+                return nParticle_[Pstream::myProcNo()];
+            }
+
+
+            //- Set the number of particles and sync across processes
+            //  Return the overall total
+            label nParticle(label n)
+            {
+                // The number of particles on each process
+                nParticle_[Pstream::myProcNo()] = n;
+                Pstream::gatherList(nParticle_);
+                Pstream::scatterList(nParticle_);
+
+                // Sum total number of particles on all processes
+                nTotal_ = sum(nParticle_);
+
+                return nTotal_;
+            }
+
+
+            //- Local process offset within a global array of parcels
+            label offset() const
+            {
+                label off = 0;
+                for (label prev=0; prev < Pstream::myProcNo(); ++prev)
+                {
+                    off += nParticle_[prev];
+                }
+
+                return off;
+            }
+
+
+            //- Reset to zeros
+            void reset()
+            {
+                nTotal_ = 0;
+                forAll(nParticle_, i)
+                {
+                    nParticle_[i] = 0;
+                }
+            }
+
+        };
+
+
+        // Per-region info variables grouped together to be able to create a list of them
         class regionInfo
         {
         public:
@@ -123,20 +213,14 @@ protected:
             //- Which (additional) attributes to write for particle data
             wordReList cloudAttribs_;
 
+            SLList<cloudInfo> cloudInfo_;
+
             //- Categorized scalar/vector/tensor vol fields
             fieldGroup<scalar> scalarFields_;
             fieldGroup<vector> vectorFields_;
 
             //- Categorized scalar/vector/tensor surf fields
             fieldGroup<scalar> surfaceScalarFields_;
-
-            //- Array containing number of particles per process (often used list)
-            //  Note this will have issues when multiple clouds exist
-            List<label> nParticles_;
-
-            //- Total number of particles (sum of nParticles_ list)
-            //  Note this will have issues when multiple clouds exist
-            label nTotalParticles_;
 
             //- Construct null
             regionInfo()
@@ -212,6 +296,14 @@ protected:
             {
                 return regionPath() / "cloud" / cloudName;
             }
+
+
+            //- Path name for named cloud
+            fileName cloudPath(const cloudInfo& cinfo) const
+            {
+                return cloudPath(cinfo.name());
+            }
+
 
             //- Simple text representation for output purposes
             word info() const
