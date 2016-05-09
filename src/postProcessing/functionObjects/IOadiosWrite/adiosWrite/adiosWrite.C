@@ -238,9 +238,9 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
 
 void Foam::adiosWrite::deleteDefinitions()
 {
-    Info<< "adiosWrite::deleteDefinitions() has been called at time "
-        << obr_.time().timeName()
-        << " time index " << obr_.time().timeIndex() << endl;
+    // Info<< "adiosWrite::deleteDefinitions() has been called at time "
+    //     << obr_.time().timeName()
+    //     << " time index " << obr_.time().timeIndex() << endl;
 
     // In ADIOS we need to remove all variable definitions in order
     // to make a new list of definitions in case the mesh changes
@@ -302,6 +302,7 @@ Foam::adiosWrite::adiosWrite
     // Write initial conditions (including mesh) if restartTime not set
     if (restartTime_ == VGREAT)
     {
+        Info<< "write initial conditions" << endl;
         write();
     }
 }
@@ -579,28 +580,10 @@ void Foam::adiosWrite::write()
         // Re-write mesh if dynamic or first time
         const bool updateMesh = (timeSteps_ == 0 || primaryMesh_.changing());
 
-        // Classify fields for all regions at every write step in case new
-        // variables appear, e.g. via function objects
-        classifyFields();
-
-#if 1
-        if (timeSteps_ != 0)
+#if 0
+        /* FIXME: code snippet to wait gdb attach on rank 0 process */
+        /* if (timeSteps_ == 0)
         {
-            // The size of patch variables is changing at every step, so in
-            // ADIOS we have to redefine the variables
-            // Note: updating all of them for simplicity
-            deleteDefinitions();
-        }
-
-        bufLen = defineVars(updateMesh);
-        maxLen = Foam::max(maxLen, bufLen);
-#else
-
-        if (timeSteps_ == 0)
-        {
-
-            /* FIXME: code snippet to wait gdb attach on rank 0 process */
-            /*
             Info<< "Pstream::myProcNo() = " << Pstream::myProcNo() << endl;
             if (Pstream::myProcNo() == 0)
             {
@@ -613,30 +596,29 @@ void Foam::adiosWrite::write()
                 while (0 == z)
                     sleep(5);
             }
-            */
-
-            // ADIOS requires to define all variables before writing anything
-            Info<< "Define variables in ADIOS" << endl;
-            bufLen = defineVars(updateMesh);
-            maxLen = Foam::max(maxLen, bufLen);
         }
-        else if (primaryMesh_.changing())
-        {
-            // Re-define all variables if mesh has changed
-            Info<< "Redefine all variables in ADIOS because primary mesh has "
-                << "changed at time " << obr_.time().timeName() << endl;
-            deleteDefinitions();
-            bufLen = defineVars(updateMesh);
-            maxLen = Foam::max(maxLen, bufLen);
-        }
+        */
 #endif
+
+        // remove old ADIOS variables/attributes
+        // - new variables may have appeared (eg, via function objects) etc
+        // - patch sizes may change with every step
+        // -> simply update everything for simplicity
+        deleteDefinitions();
+
+        classifyFields();
+
+        // ADIOS requires to define all variables before writing anything
+        Info<< "Define variables in ADIOS" << endl;
+        bufLen = defineVars(updateMesh);
+        maxLen = Foam::max(maxLen, bufLen);
+
+        // Pout<<"reserve write buffer " << maxLen << endl;
+        iobuffer_.reserve(maxLen); // NEEDS attention if iobuffer is not char!
 
         // Create/reopen ADIOS output file, and tell ADIOS how many bytes we
         // are going to write
         open();
-
-        Pout<<"reserve write buffer " << maxLen << endl;
-        iobuffer_.reserve(maxLen);
 
         // General information (as variable)
         writeIntVariable

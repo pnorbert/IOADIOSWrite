@@ -28,6 +28,7 @@ License
 
 #include "ParticleBinaryBlob.H"
 #include "basicKinematicCloud.H"
+#include "basicKinematicCollidingCloud.H"
 #include "reactingCloud.H"
 
 

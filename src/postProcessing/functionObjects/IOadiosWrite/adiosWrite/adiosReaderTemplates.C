@@ -24,11 +24,8 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosReader.H"
-
 #include "error.H"
 #include "CStringList.H"
-
-#include "Ostream.H"
 
 #include "adios.h"
 #include "adios_read.h"
@@ -36,10 +33,52 @@ License
 
 // * * * * * * * * * * * * * * Member Functions * * * * * * * * * * * * * * * //
 
-template<class StringType>
-bool Foam::adiosReader::helper::readStringListAttributeIfPresent
+template<class T>
+size_t Foam::adiosReader::getBuffered
 (
-    const string& attrName,
+    const string& name,
+    DynamicList<T>& buffer
+) const
+{
+    size_t nbytes = 0;
+
+    if (hasVariable(name))
+    {
+        const VarInfo& vinfo = variables[name];
+        nbytes = vinfo.sizeOf();
+
+        const size_t sizeT = sizeof(T);
+        const size_t target = (nbytes / sizeT) + (nbytes % sizeT);
+
+        buffer.reserve(nbytes / sizeT + nbytes % sizeT);
+
+        if (getVariable(name, buffer.data()))
+        {
+            buffer.setSize(target);
+        }
+        else
+        {
+            buffer.setSize(0);
+            nbytes = 0;
+        }
+    }
+
+    if (!nbytes)
+    {
+        FatalErrorInFunction
+            << "missing adios variable: " << name
+            << exit(FatalIOError);
+    }
+
+    return nbytes;
+}
+
+
+
+template<class StringType>
+bool Foam::adiosReader::readStringListAttributeIfPresent
+(
+    const string& name,
     List<StringType>& lst
 ) const
 {
@@ -49,12 +88,12 @@ bool Foam::adiosReader::helper::readStringListAttributeIfPresent
 
     bool ok =
     (
-        attributes.found(attrName)
+        hasAttribute(name)
      && 0 ==
         adios_get_attr_byid
         (
             file,
-            attributes[attrName],
+            attributes[name],
             &type,
             &size,
             &data
@@ -84,7 +123,7 @@ bool Foam::adiosReader::helper::readStringListAttributeIfPresent
         if (!ok)
         {
             FatalErrorInFunction
-                << "string-list attribute has wrong type: " << attrName << nl
+                << "string-list attribute has wrong type: " << name << nl
                 << "  expecting char*[], found "
                 << adios_type_to_string(type)
                 << exit(FatalIOError);
@@ -92,25 +131,6 @@ bool Foam::adiosReader::helper::readStringListAttributeIfPresent
     }
 
     return ok;
-}
-
-
-template<class StringType>
-Foam::List<StringType> Foam::adiosReader::helper::getStringListAttribute
-(
-    const string& attrName
-) const
-{
-    List<StringType> value;
-
-    if (!readStringListAttributeIfPresent(attrName, value))
-    {
-        FatalErrorInFunction
-            << "string-list attribute missing: " << attrName
-            << exit(FatalIOError);
-    }
-
-    return value;
 }
 
 

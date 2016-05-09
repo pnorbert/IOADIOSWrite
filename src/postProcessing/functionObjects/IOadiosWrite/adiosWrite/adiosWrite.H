@@ -674,8 +674,17 @@ protected:
             bool readVolField
             (
                 regIOobject* obj,
-                adiosReader::helper& helper,
+                const adiosReader& reader,
                 const adiosReader::fieldInfo& src
+            );
+
+            //- Read data for a given volume field type
+            bool readCloud
+            (
+                const fvMesh& mesh,
+                const word& cloudName,
+                const adiosReader& reader,
+                const adiosReader::cloudInfo& src
             );
 
             //- Read data for a given type
@@ -683,7 +692,7 @@ protected:
             bool fieldRead
             (
                 FieldType& field,
-                adiosReader::helper& helper,
+                const adiosReader& reader,
                 const adiosReader::fieldInfo& src
             );
 
@@ -691,7 +700,7 @@ protected:
             template<class FieldType>
             bool fieldRead
             (
-                adiosReader::helper& helper,
+                const adiosReader& reader,
                 const fvMesh& mesh,
                 const adiosReader::fieldInfo& src
             );
@@ -740,11 +749,6 @@ protected:
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
             bool readData();
-
-            bool readClouds(adiosReader::helper&, regionInfo&);
-
-            // bool readScalarFields(adiosReader::helper&, regionInfo&);
-            // NOT YET: bool readClouds(adiosReader::helper&, label regionID);
 
 public:
 

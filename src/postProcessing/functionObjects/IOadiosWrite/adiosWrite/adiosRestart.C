@@ -2,9 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright(C) 2011 OpenFOAM Foundation
-     \\/     M anipulation  |              2015 Norbert Podhorszki
-                            |              2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright(C) 2015 Norbert Podhorszki
+     \\/     M anipulation  | Copyright(C) 2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -30,6 +29,8 @@ License
 #include "dictionary.H"
 #include "scalar.H"
 #include "basicKinematicCloud.H"
+#include "basicKinematicCollidingCloud.H"
+#include "reactingCloud.H"
 #include "emptyFvPatchField.H"
 
 #include "IBufStream.H"
@@ -41,17 +42,14 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
 {
     Info<< " Read data of step " << bpFile << endl;
 
-    adiosReader::helper helper(iobuffer_);
+    adiosReader reader(bpFile.c_str(), comm_);
 
-    if (!helper.open(bpFile.c_str(), comm_))
+    if (!reader.isGood())
     {
         return false;
     }
 
-    // Process N will read writeblock N
-    helper.select(adios_selection_writeblock(Pstream::myProcNo()));
-    helper.scan(true);
-    helper.buffer.reserve(helper.maxLen);
+    iobuffer_.reserve(reader.sizeOf());
 
     // direct lookup via time_.lookupClass<fvMesh>() would be nice,
     // but have to trick the compiler not to get the const-version.
@@ -68,7 +66,7 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
 
         Info<<"lookup: " << regName << endl;
 
-        HashTable<adiosReader::fieldInfo> fromFile = helper.getFieldInfo(regName);
+        HashTable<adiosReader::fieldInfo> fromFile = reader.getFieldInfo(regName);
         wordList fieldNames = fromFile.sortedToc();
 
         forAll(fieldNames, fieldI)
@@ -78,22 +76,39 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
 
             if ((static_cast<objectRegistry&>(mesh)).found(name))
             {
-                readVolField(mesh.find(name)(), helper, src);
+                readVolField(mesh.find(name)(), reader, src);
             }
         }
     }
 
 
-    bool ok = true;
-    forAll(regions_, regionId)
+    // clouds
+    forAll(meshNames, regI)
     {
-        regionInfo& rInfo = regions_[regionId];
+        const word& regName = meshNames[regI];
+        fvMesh& mesh = const_cast<fvMesh&>(time_.lookupObject<fvMesh>(regName));
 
-        ok = readClouds(helper, rInfo);
+        Info<<"lookup: " << regName << endl;
+
+        HashTable<adiosReader::cloudInfo> fromFile = reader.getCloudInfo(regName);
+        wordList cloudNames = fromFile.sortedToc();
+
+        forAll(cloudNames, fieldI)
+        {
+            const word& name = cloudNames[fieldI];
+            const adiosReader::cloudInfo& src = fromFile[name];
+
+            if ((static_cast<objectRegistry&>(mesh)).found(name))
+            {
+                Info<<"read-back cloud " << name << endl;
+                readCloud(mesh, name, reader, src);
+            }
+         }
     }
 
-    helper.close();
-    return ok;
+    reader.close();
+
+    return true;
 }
 
 
@@ -115,7 +130,7 @@ bool Foam::adiosWrite::readData()
 bool Foam::adiosWrite::readVolField
 (
     regIOobject* obj,
-    adiosReader::helper& helper,
+    const adiosReader& reader,
     const adiosReader::fieldInfo& src
 )
 {
@@ -137,7 +152,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volScalarField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -146,7 +161,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volVectorField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -155,7 +170,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<surfaceScalarField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -164,7 +179,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volSphericalTensorField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -173,7 +188,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volSymmTensorField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -182,7 +197,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volTensorField&>(*obj),
-            helper,
+            reader,
             src
         );
     }
@@ -193,82 +208,83 @@ bool Foam::adiosWrite::readVolField
 }
 
 
-bool Foam::adiosWrite::readClouds(adiosReader::helper& helper, regionInfo& rInfo)
+bool Foam::adiosWrite::readCloud
+(
+    const fvMesh& mesh,
+    const word& cloudName,
+    const adiosReader& reader,
+    const adiosReader::cloudInfo& src
+)
 {
-    bool ok = true;
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+    regIOobject* obj = *(const_cast<fvMesh&>(mesh).find(cloudName));
+    const word& cloudType = obj->type();
+    const word&   srcType = src.type();
 
-    forAll(rInfo.cloudNames_, cloudI)
+    if (cloudType != srcType)
     {
-        Info<< "    cloud: " << rInfo.cloudNames_[cloudI] << endl;
-
-        const kinematicCloud& constCloud =
-            mesh.lookupObject<kinematicCloud>(rInfo.cloudNames_[cloudI]);
-
-        kinematicCloud& cloud = const_cast<kinematicCloud&>(constCloud);
-
-        //basicKinematicCloud *q =(basicKinematicCloud*) &cloud;
-        basicKinematicCloud *q = reinterpret_cast<basicKinematicCloud*>(&cloud);
-
-        fileName varPath = rInfo.cloudPath(rInfo.cloudNames_[cloudI]);
-        fileName datasetName(varPath/"nParticle");
-
-        // Get the number of particles saved by this rank
-        int nparts = 0;
-        ok = helper.getDataSet(datasetName, &nparts);
-
-        /*
-        // Get the number of particles saved by this rank
-        ADIOS_VARINFO * vi = adios_inq_var(helper.file, datasetName);
-        if (vi != NULL)
-        {
-            adios_inq_var_blockinfo(helper.file, vi);
-            if (vi->sum_nblocks > Pstream::myProcNo())
-            {
-                nParticles = vi->blockinfo[Pstream::myProcNo()].count[0];
-            }
-            else
-            {
-                WarningInFunction
-                    << "Error reading cloud " << datasetName
-                    << ": Number of available blocks = " << vi->sum_nblocks
-                    << " is less than this rank " << Pstream::myProcNo()
-                    << endl;
-            }
-            adios_free_varinfo(vi);
-        }
-        else
-        {
-            WarningInFunction
-                << "Error reading cloud " << datasetName
-                << " from adios checkpoint file: variable not found."
-                << endl;
-            ok = false;
-        }
-        */
-
-        if (!ok) break;
-
-////        // Read into a plain continuous array for the data
-////        // Allocate memory for 1-comp. dataset of type 'integer' for adios_integer reads
-////        int labelData[nparts];
-////
-////        // Read original processor ID
-////        if (findStrings(rInfo.cloudAttribs_, "origProc"))
-////        {
-////            Info<< "      dataset origProc " << endl;
-////            ok = helper.getDataSet(varPath/"origProc", labelData);
-////            label i = 0;
-////            forAllIter(basicKinematicCloud, *q, pIter)
-////            {
-////                pIter().origProc() = labelData[i++];
-////            }
-////        }
-////
-        if (!ok) break;
+        // probably fatal:
+        Info<<"WARNING mismatch on cloud " << src
+            << " (expected: " << cloudType
+            << " but had " << srcType << ")\n";
+        return false;
     }
 
-    return ok;
+    if (cloudType == Cloud<basicKinematicCollidingParcel>::typeName)
+    {
+        Info<<"read cloud " << obj->name() << " (type " << cloudType
+            << ") from file\n";
+
+        Cloud<basicKinematicCollidingParcel>& cloudObj =
+            static_cast< Cloud<basicKinematicCollidingParcel> &>(*obj);
+
+        Pout<<"Current cloud: " << cloudObj.size() << " parcels. Cloud on file: "
+            << src.nParticle() << " elements" << endl;
+
+        typedef Cloud<basicKinematicCollidingParcel>::particleType pType;
+
+        if (cloudObj.size() > src.nParticle())
+        {
+            // TODO: truncate!
+            Pout<<"WARNING cloud " << obj->name() << " needs truncating. Has "
+                << cloudObj.size() << " parcels, but file has "
+                << src.nParticle() << endl;
+        }
+        else if (cloudObj.size() < src.nParticle())
+        {
+            // TODO: add to end of list!
+            Pout<<"WARNING cloud " << obj->name() << " needs expansion. Has "
+                << cloudObj.size() << " parcels, but file has "
+                << src.nParticle() << endl;
+        }
+
+        size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+
+        IBufStream is(iobuffer_, nread, IOstream::BINARY);
+#if 0
+        cloudObj.clear();
+        IDLList<pType> newParticles
+        (
+            is,
+            pType::iNew(mesh)
+        );
+
+        forAllIter(Cloud<pType>, newParticles, newpIter)
+        {
+            pType& newp = newpIter();
+
+            cloudObj.addParticle(newParticles.remove(&newp));
+        }
+#endif
+        return true;
+    }
+    else
+    {
+        Info<<"read cloud " << obj->name() << " (type " << cloudType
+            << ") from file - unsupported type" << endl;
+
+
+        return false;
+    }
 }
 
 

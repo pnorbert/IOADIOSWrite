@@ -30,14 +30,9 @@ License
 #include "IOstreams.H"
 #include "Pstream.H"
 
-
-// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
-
-// * * * * * * * * * * * * * Static Member Functions * * * * * * * * * * * * //
-
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-void Foam::adiosReader::helper::scan(bool verbose)
+void Foam::adiosReader::scan(bool verbose)
 {
     maxLen = 0;
     variables.clear();
@@ -66,12 +61,12 @@ void Foam::adiosReader::helper::scan(bool verbose)
     // hash as (name => lookup index)
     for (int i=0; i < file->nattrs; ++i)
     {
-        const char* attrName = file->attr_namelist[i];
-        attributes.insert(attrName, i);
+        const char* name = file->attr_namelist[i];
+        attributes.insert(name, i);
 
         if (verbose)
         {
-            Info<< "attribute: " << attrName << endl;
+            Info<< "attribute: " << name << endl;
         }
     }
 
@@ -79,16 +74,15 @@ void Foam::adiosReader::helper::scan(bool verbose)
     // hash as (name => nbytes on this process)
     for (int i=0; i < file->nvars; ++i)
     {
-        const char* varName = file->var_namelist[i];
+        VarInfo vinfo(file, file->var_namelist[i]);
 
-        size_t varsize = sizeOf(varName);
-        variables.insert(varName, varsize);
+        variables.insert(vinfo.name(), vinfo);
 
-        maxLen = Foam::max(maxLen, varsize);
+        maxLen = Foam::max(maxLen, vinfo.sizeOf());
 
         if (verbose)
         {
-            Info<< "variable: " << varName << endl;
+            Info<< "variable: " << vinfo.name() << endl;
         }
     }
 
@@ -133,7 +127,7 @@ void Foam::adiosReader::helper::scan(bool verbose)
 
             forAll(cloudNames, cloudI)
             {
-                fileName varPath = regName/"cloud"/cloudNames[cloudI];
+                fileName varPath = adiosCore::cloudPath(regName, cloudNames[cloudI]);
                 label nTotal = getIntAttribute(varPath/"nParticle");
                 label nBytes = getIntAttribute(varPath/"size");
 
@@ -155,53 +149,28 @@ void Foam::adiosReader::helper::scan(bool verbose)
 }
 
 
-Foam::HashTable<Foam::adiosReader::fieldInfo>
-Foam::adiosReader::helper::getFieldInfo(const word& regName) const
-{
-    const string startsWith = regName / "field";
-
-    typedef HashTable<size_t, fileName> VarContainer;
-
-    HashTable<fieldInfo> table;
-
-    forAllConstIter(VarContainer, variables, iter)
-    {
-        const fileName& varName = iter.key();
-        size_t bytes = iter();
-
-        if (varName.count('/') == 2 && varName.path() == startsWith)
-        {
-            // matches regName/field/xxx
-
-            table.insert
-            (
-                varName.name(),
-                fieldInfo
-                (
-                    varName,
-                    bytes,
-                    getStringAttribute(varName/"class")
-                )
-            );
-        }
-    }
-
-    return table;
-}
-
-
-// * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
-
-
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::adiosReader::helper::helper(const DynamicCharList& buf)
+Foam::adiosReader::adiosReader()
 :
-    buffer(const_cast<DynamicCharList&>(buf)),
-    file(NULL),
-    selection(NULL),
-    maxLen(0)
+    file(0),
+    selection(0),
+    maxLen(0),
+    regionNames_(),
+    cloudNames_()
 {}
+
+
+Foam::adiosReader::adiosReader(const fileName& bpFile, MPI_Comm comm)
+:
+    file(0),
+    selection(0),
+    maxLen(0),
+    regionNames_(),
+    cloudNames_()
+{
+    open(bpFile, comm);
+}
 
 
 // * * * * * * * * * * * * * * * * Selectors * * * * * * * * * * * * * * * * //
@@ -209,7 +178,7 @@ Foam::adiosReader::helper::helper(const DynamicCharList& buf)
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
-Foam::adiosReader::helper::~helper()
+Foam::adiosReader::~adiosReader()
 {
     close();
 }
@@ -218,12 +187,12 @@ Foam::adiosReader::helper::~helper()
 // * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 
-bool Foam::adiosReader::helper::open(const fileName& bpFile, MPI_Comm comm)
+bool Foam::adiosReader::open(const fileName& bpFile, MPI_Comm comm)
 {
     // close anything already open
     close();
 
-    Info<< " Read data of step " << bpFile << endl;
+    // Info<< " Read data of step " << bpFile << endl;
 
     file = adios_read_open_file
     (
@@ -232,18 +201,23 @@ bool Foam::adiosReader::helper::open(const fileName& bpFile, MPI_Comm comm)
         comm
     );
 
-    if (!file)
+    if (file)
+    {
+        select(adios_selection_writeblock(Pstream::myProcNo()));
+        scan(false);
+
+        // Info<< "found num-vars: " << file->nvars << endl;
+    }
+    else
     {
         return false;
     }
 
-    Info<< "found num-vars: " << file->nvars << endl;
-
-    return file;
+    return isGood();
 }
 
 
-void Foam::adiosReader::helper::select(ADIOS_SELECTION *sel)
+void Foam::adiosReader::select(ADIOS_SELECTION *sel)
 {
     if (selection)
     {
@@ -254,192 +228,18 @@ void Foam::adiosReader::helper::select(ADIOS_SELECTION *sel)
 }
 
 
-size_t Foam::adiosReader::helper::sizeOf
-(
-    const char* datasetName,
-    bool verbose
-)
-{
-    size_t bytes = 0;
-
-    if (file)
-    {
-        // TODO? restrict sizing to current processor!
-        ADIOS_VARINFO *varInfo = adios_inq_var(file, datasetName);
-
-        if (!varInfo)
-        {
-            WarningInFunction
-                << "Error reading variable information " << datasetName
-                << " from adios file: "
-                << adios_errmsg() << endl;
-
-            return 0;
-        }
-
-        if (varInfo->type == adios_string)
-        {
-            WarningInFunction
-                << "Reading sizes for adios_string variables incomplete: " << datasetName
-                << " from adios file: "
-                << endl;
-
-            return 0;
-        }
-
-        if (varInfo->ndim > 0)
-        {
-            int nblocks = varInfo->sum_nblocks;
-
-            // Pout<< " variable=" << datasetName
-            //     << " dims: " << varInfo->ndim << " nblocks:"  << nblocks << endl;
-
-            // get block-decomposition
-            int err = adios_inq_var_blockinfo(file, varInfo);
-            if (err)
-            {
-                WarningInFunction
-                    << "Error reading blockinfo for dataset " << datasetName
-                    << " from adios file: "
-                    << adios_errmsg() << endl;
-            }
-            else
-            {
-                ADIOS_VARBLOCK *bp = varInfo->blockinfo;
-
-                for (int blockI=0; blockI < nblocks; ++blockI)
-                {
-                    // Pout<< datasetName
-                    //     << " size:"<< varInfo->dims[0]
-                    //     << " block[" << blockI
-                    //     << "] start:" << *(bp->start)
-                    //     << " count:" << *(bp->count)
-                    //     << " process:" << bp->process_id
-                    //     << " time-index:" << bp->time_index
-                    //     << endl;
-
-                    if (Foam::label(bp->process_id) == Pstream::myProcNo())
-                    {
-                        bytes += *(bp->count);
-                    }
-
-                    ++bp;
-                }
-            }
-
-            // fallback: only consider 1-D storage:
-            if (!bytes)
-            {
-                bytes = varInfo->dims[0];
-
-                // for (int dimI=1; dimI < varInfo->ndim; ++dimI)
-                // {
-                //     ... varInfo->dims[dimI];
-                // }
-            }
-        }
-        else
-        {
-            // Pout<< " variable=" << datasetName << " is scalar" << endl;
-            bytes = 1; // scalar value
-        }
-
-        bytes *= adios_type_size(varInfo->type, NULL);
-
-        if (verbose)
-        {
-            Pout<< " variable=" << datasetName
-                << " nbytes=" << bytes
-                << " type=" << adios_type_to_string(varInfo->type)
-                << endl;
-        }
-
-        // free ADIOS_VARINFO and any ADIOS_VARBLOCK(s)
-        adios_free_varinfo(varInfo);
-    }
-
-    return bytes;
-}
-
-
-size_t Foam::adiosReader::helper::sizeOf
-(
-    const string& datasetName,
-    bool verbose
-)
-{
-    return sizeOf(datasetName.c_str(), verbose);
-}
-
-
-bool Foam::adiosReader::helper::getDataSet
-(
-    const string& datasetName
-)
-{
-    // is.name() = Foam::name(Pstream::myProcNo()) / datasetName;
-    size_t nbytes = sizeOf(datasetName, true);
-    buffer.reserve(nbytes);
-
-    bool ok = getDataSet(datasetName, buffer.data());
-    if (ok)
-    {
-        buffer.setSize(nbytes);
-    }
-    else
-    {
-        buffer.setSize(0);
-    }
-
-    return ok;
-}
-
-
-bool Foam::adiosReader::helper::getDataSet
-(
-    const string& datasetName,
-    void* data
-)
-{
-    Pout<<"read data-set " << datasetName << endl;
-
-    int err = adios_schedule_read
-    (
-        file,
-        selection,
-        datasetName.c_str(),
-        0, 1,
-        data
-    );
-
-    if (err)
-    {
-        WarningInFunction
-            << "Error reading dataset " << datasetName
-            << " from adios file: "
-            << adios_errmsg() << endl;
-    }
-    else
-    {
-        err = adios_perform_reads(file, 1); // blocking
-    }
-
-    return !err;
-}
-
-
-void Foam::adiosReader::helper::close()
+void Foam::adiosReader::close()
 {
     if (selection)
     {
         adios_selection_delete(selection);
-        selection = NULL;
+        selection = 0;
     }
 
     if (file)
     {
         adios_read_close(file);
-        file = NULL;
+        file = 0;
     }
 
     attributes.clear();
@@ -452,10 +252,70 @@ void Foam::adiosReader::helper::close()
 }
 
 
-bool Foam::adiosReader::helper::readIntAttributeIfPresent
+bool Foam::adiosReader::isGood() const
+{
+    return file;
+}
+
+
+Foam::HashTable<Foam::adiosReader::fieldInfo>
+Foam::adiosReader::getFieldInfo(const word& regName) const
+{
+    const string startsWith = adiosCore::fieldPath(regName);
+
+    HashTable<fieldInfo> table;
+
+    forAllConstIter(VarContainer, variables, iter)
+    {
+        const fileName& varName = iter.key();
+        const VarInfo&  varInfo = iter();
+
+        if (varName.count('/') == 2 && varName.path() == startsWith)
+        {
+            // matches regName/field/xxx
+
+            fieldInfo info
+            (
+                varName,
+                varInfo.sizeOf(),
+                getStringAttribute(varName/"class")
+            );
+
+            table.insert(varName.name(), info);
+        }
+    }
+
+    return table;
+}
+
+
+Foam::HashTable<Foam::adiosReader::cloudInfo>
+Foam::adiosReader::getCloudInfo(const word& regName) const
+{
+    const string startsWith = adiosCore::cloudPath(regName);
+
+    HashTable<cloudInfo> table;
+
+    forAllConstIter(VarContainer, variables, iter)
+    {
+        const fileName& varName = iter.key();
+        const VarInfo&  varInfo = iter();
+
+        if (varName.count('/') == 2 && varName.path() == startsWith)
+        {
+            // matches regName/cloud/xxx
+            table.insert(varName.name(), cloudInfo(varInfo, *this));
+        }
+    }
+
+    return table;
+}
+
+
+bool Foam::adiosReader::readIntAttributeIfPresent
 (
-    const string& attrName,
-    label &value
+    const string& name,
+    label& value
 ) const
 {
     enum ADIOS_DATATYPES type = adios_unknown;
@@ -464,12 +324,12 @@ bool Foam::adiosReader::helper::readIntAttributeIfPresent
 
     bool ok =
     (
-        attributes.found(attrName)
+        hasAttribute(name)
      && 0 ==
         adios_get_attr_byid
         (
             file,
-            attributes[attrName],
+            attributes[name],
             &type,
             &size,
             &data
@@ -478,24 +338,17 @@ bool Foam::adiosReader::helper::readIntAttributeIfPresent
 
     if (ok)
     {
-        if (type == adios_integer)
+        if (type == adios_integer || type == adios_unsigned_integer)
         {
+            // we don't distinguish between signed/unsigned
+            // mostly just use signed anyhow
+
             size /= sizeof(int);
             ok = (size == 1);
 
             if (ok)
             {
                 value = *(reinterpret_cast<int*>(data));
-            }
-        }
-        else if (type == adios_unsigned_integer)
-        {
-            size /= sizeof(unsigned int);
-            ok = (size == 1);
-
-            if (ok)
-            {
-                value = *(reinterpret_cast<unsigned int*>(data));
             }
         }
         else
@@ -514,14 +367,14 @@ bool Foam::adiosReader::helper::readIntAttributeIfPresent
             if (size)
             {
                 FatalErrorInFunction
-                    << "too many elements for attribute: " << attrName << nl
+                    << "too many elements for attribute: " << name << nl
                     << "  expecting 1 int/unsigned, found " << size
                     << exit(FatalIOError);
             }
             else
             {
                 FatalErrorInFunction
-                    << "incorrect type for attribute: " << attrName << nl
+                    << "incorrect type for attribute: " << name << nl
                     << "  expecting int/unsigned, found "
                     << adios_type_to_string(type)
                     << exit(FatalIOError);
@@ -533,9 +386,9 @@ bool Foam::adiosReader::helper::readIntAttributeIfPresent
 }
 
 
-bool Foam::adiosReader::helper::readIntListAttributeIfPresent
+bool Foam::adiosReader::readIntListAttributeIfPresent
 (
-    const string& attrName,
+    const string& name,
     List<label>& lst
 ) const
 {
@@ -545,12 +398,12 @@ bool Foam::adiosReader::helper::readIntListAttributeIfPresent
 
     bool ok =
     (
-        attributes.found(attrName)
+        hasAttribute(name)
      && 0 ==
         adios_get_attr_byid
         (
             file,
-            attributes[attrName],
+            attributes[name],
             &type,
             &size,
             &data
@@ -559,30 +412,17 @@ bool Foam::adiosReader::helper::readIntListAttributeIfPresent
 
     if (ok)
     {
-        if (type == adios_integer)
+        if (type == adios_integer || adios_unsigned_integer)
         {
+            // we don't distinguish between signed/unsigned
+            // mostly just use signed anyhow
+
             size /= sizeof(int);
             ok = (size > 1);
 
             if (ok)
             {
                 int *ptr = reinterpret_cast<int*>(data);
-
-                lst.setSize(size);
-                for (int i=0; i < size; ++i)
-                {
-                    lst[i] = ptr[i];
-                }
-            }
-        }
-        else if (type == adios_unsigned_integer)
-        {
-            size /= sizeof(unsigned int);
-            ok = (size > 1);
-
-            if (ok)
-            {
-                unsigned int* ptr = reinterpret_cast<unsigned int*>(data);
 
                 lst.setSize(size);
                 for (int i=0; i < size; ++i)
@@ -607,14 +447,14 @@ bool Foam::adiosReader::helper::readIntListAttributeIfPresent
             if (size == 1)
             {
                 FatalErrorInFunction
-                    << "too few elements for attribute: " << attrName << nl
+                    << "too few elements for attribute: " << name << nl
                     << "  expecting multiple int/unsigned values, found 1"
                     << exit(FatalIOError);
             }
             else
             {
                 FatalErrorInFunction
-                    << "incorrect type for attribute: " << attrName << nl
+                    << "incorrect type for attribute: " << name << nl
                     << "  expecting int/unsigned, found "
                     << adios_type_to_string(type)
                     << exit(FatalIOError);
@@ -626,10 +466,10 @@ bool Foam::adiosReader::helper::readIntListAttributeIfPresent
 }
 
 
-bool Foam::adiosReader::helper::readStringAttributeIfPresent
+bool Foam::adiosReader::readStringAttributeIfPresent
 (
-    const string& attrName,
-    string &value
+    const string& name,
+    string& value
 ) const
 {
     enum ADIOS_DATATYPES type = adios_unknown;
@@ -638,12 +478,12 @@ bool Foam::adiosReader::helper::readStringAttributeIfPresent
 
     bool ok =
     (
-        attributes.found(attrName)
+        hasAttribute(name)
      && 0 ==
         adios_get_attr_byid
         (
             file,
-            attributes[attrName],
+            attributes[name],
             &type,
             &size,
             &data
@@ -669,7 +509,7 @@ bool Foam::adiosReader::helper::readStringAttributeIfPresent
         if (!ok)
         {
             FatalErrorInFunction
-                << "incorrect type for attribute: " << attrName << nl
+                << "incorrect type for attribute: " << name << nl
                 << "  expecting string, found "
                 << adios_type_to_string(type)
                 << exit(FatalIOError);
@@ -680,67 +520,244 @@ bool Foam::adiosReader::helper::readStringAttributeIfPresent
 }
 
 
-Foam::label Foam::adiosReader::helper::getIntAttribute
+bool Foam::adiosReader::readIntVariableIfPresent
 (
-    const string& attrName
+    const string& name,
+    label& value
 ) const
 {
-    label value;
+    bool ok = hasVariable(name);
+    int err = 0;
+    int data = 0;
 
-    if (!readIntAttributeIfPresent(attrName, value))
+    if (ok)
     {
-        FatalErrorInFunction
-            << "integer attribute missing: " << attrName
-            << exit(FatalIOError);
+        const VarInfo& vinfo = variables[name];
+        int size = vinfo.nElem();
+
+        if
+        (
+            vinfo.dataType() == adios_integer
+         || vinfo.dataType() == adios_unsigned_integer
+        )
+        {
+            // we don't distinguish between signed/unsigned
+            // mostly just use signed anyhow
+
+            ok = (size == 1);
+
+            if (ok)
+            {
+                err = adios_schedule_read
+                (
+                    file,
+                    selection,
+                    name.c_str(),
+                    0, 1,
+                    &data
+                );
+
+                if (!err)
+                {
+                    err = adios_perform_reads(file, 1); // blocking
+                }
+
+                if (!err)
+                {
+                    value = data;
+                }
+                else
+                {
+                    FatalErrorInFunction
+                        << "error reading adios variable: " << name << nl
+                        << exit(FatalIOError);
+                }
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (!ok)
+        {
+            if (size)
+            {
+                FatalErrorInFunction
+                    << "too many elements for variable: " << name << nl
+                    << "  expecting 1 int/unsigned, found " << size
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for variable: " << name << nl
+                    << "  expecting int/unsigned, found "
+                    << adios_type_to_string(vinfo.dataType())
+                    << exit(FatalIOError);
+            }
+        }
     }
 
-    return value;
+    return ok;
 }
 
 
-Foam::List<Foam::label> Foam::adiosReader::helper::getIntListAttribute
+bool Foam::adiosReader::readScalarVariableIfPresent
 (
-    const string& attrName
+    const string& name,
+    scalar& value
 ) const
 {
-    List<label> value;
+    bool ok = hasVariable(name);
+    int err = 0;
 
-    if (!readIntListAttributeIfPresent(attrName, value))
+    if (ok)
     {
-        FatalErrorInFunction
-            << "int-list attribute missing: " << attrName
-            << exit(FatalIOError);
+        const VarInfo& vinfo = variables[name];
+
+        int size = vinfo.nElem();
+        if (vinfo.dataType() == adios_real)
+        {
+            ok = (size == 1);
+
+            if (ok)
+            {
+                float data = 0;
+
+                err = adios_schedule_read
+                (
+                    file,
+                    selection,
+                    name.c_str(),
+                    0, 1,
+                    &data
+                );
+
+                if (!err)
+                {
+                    err = adios_perform_reads(file, 1); // blocking
+                }
+
+                if (!err)
+                {
+                    value = data;
+                }
+                else
+                {
+                    FatalErrorInFunction
+                        << "error reading adios variable: " << name << nl
+                        << exit(FatalIOError);
+                }
+            }
+        }
+        else if (vinfo.dataType() == adios_double)
+        {
+            ok = (size == 1);
+
+            if (ok)
+            {
+                double data = 0;
+
+                err = adios_schedule_read
+                (
+                    file,
+                    selection,
+                    name.c_str(),
+                    0, 1,
+                    &data
+                );
+
+                if (!err)
+                {
+                    err = adios_perform_reads(file, 1); // blocking
+                }
+
+                if (!err)
+                {
+                    value = data;
+                }
+                else
+                {
+                    FatalErrorInFunction
+                        << "error reading adios variable: " << name << nl
+                        << exit(FatalIOError);
+                }
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (!ok)
+        {
+            if (size)
+            {
+                FatalErrorInFunction
+                    << "too many elements for variable: " << name << nl
+                    << "  expecting 1 float/double, found " << size
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for variable: " << name << nl
+                    << "  expecting  float/double, found "
+                    << adios_type_to_string(vinfo.dataType())
+                    << exit(FatalIOError);
+            }
+        }
     }
 
-    return value;
+    return ok;
 }
 
 
-Foam::string Foam::adiosReader::helper::getStringAttribute
+bool Foam::adiosReader::getVariable
 (
-    const string& attrName
+    const string& name,
+    void* data
 ) const
 {
-    string value;
+    // Pout<<"read data-set " << name << endl;
+    bool ok = hasVariable(name);
+    if (ok)
+    {
+        int err = adios_schedule_read
+        (
+            file,
+            selection,
+            name.c_str(),
+            0, 1,
+            data
+        );
 
-    if (!readStringAttributeIfPresent(attrName, value))
+        if (!err)
+        {
+            err = adios_perform_reads(file, 1); // blocking
+        }
+
+        if (err)
+        {
+            FatalErrorInFunction
+                << "Error reading adios variable " << name
+                << adios_errmsg() << endl;
+        }
+
+        ok = !err;
+    }
+    else
     {
         FatalErrorInFunction
-            << "string attribute missing: " << attrName
+            << "missing adios variable: " << name
             << exit(FatalIOError);
     }
 
-    return value;
+    return ok;
 }
-
-
-// * * * * * * * * * * * * * * Member Operators  * * * * * * * * * * * * * * //
-
-
-// * * * * * * * * * * * * * * Friend Functions  * * * * * * * * * * * * * * //
-
-
-// * * * * * * * * * * * * * * Friend Operators * * * * * * * * * * * * * * //
 
 
 // ************************************************************************* //

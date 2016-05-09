@@ -68,13 +68,6 @@ private:
 
     // Private Member Functions
 
-        //- Disallow default bitwise copy construct
-        ParticleBinaryBlob(const ParticleBinaryBlob&);
-
-        //- Disallow default bitwise assignment
-        void operator=(const ParticleBinaryBlob&);
-
-
         //- Clear internal lists
         void clear();
 
@@ -102,6 +95,9 @@ private:
 public:
 
     // Constructors
+
+        //- Construct null
+        ParticleBinaryBlob();
 
         //- Construct from type names and variable names
         //  Optionally verify the offsets and widths

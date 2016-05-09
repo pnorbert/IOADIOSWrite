@@ -2,6 +2,8 @@ adiosWrite/adiosTypes.C
 
 adiosWrite/adiosCore.C
 adiosWrite/adiosReader.C
+adiosWrite/adiosReaderCloudInfo.C
+adiosWrite/adiosReaderVarInfo.C
 adiosWrite/adiosWrite.C
 adiosWrite/adiosWriteFunctionObject.C
 adiosWrite/adiosWriteGrouping.C

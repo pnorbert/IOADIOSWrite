@@ -44,6 +44,8 @@ SourceFiles
 #include "adios.h"
 #include "adios_read.h"
 
+#include "ParticleBinaryBlob.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 namespace Foam
@@ -57,124 +59,92 @@ class adiosReader
 {
 public:
 
-    class fieldInfo
-    :
-        public fileName
-    {
-        size_t nbytes_;
-        word className_;
+        // Forward declarations of various sub-components
+        class VarInfo;
+        class fieldInfo;
+        class cloudInfo;
 
-    public:
+        //- Container type for attributes
+        typedef HashTable<int, fileName> AttrContainer;
 
-        fieldInfo()
-        :
-            fileName(),
-            nbytes_(0),
-            className_()
-        {}
+        //- Container type for variables
+        typedef HashTable<VarInfo, fileName> VarContainer;
 
-        fieldInfo
-        (
-            const fileName& varName,
-            size_t nbytes,
-            const word& className
-        )
-        :
-            fileName(varName),
-            nbytes_(nbytes),
-            className_(className)
-        {}
+private:
 
+    // Private Data
 
-        //- The region name is before the first /
-        const word regionName() const
-        {
-            return substr(0, find('/')); // not designed for failure
-        }
-
-
-        //- Return file name (part beyond last /)
-        using fileName::name;
-
-        //- Return directory path name (part before last /)
-        using fileName::path;
-
-
-        //- The class (volScalarField etc)
-        const word& type() const
-        {
-            return className_;
-        }
-
-        //- Local size in bytes
-        size_t length() const
-        {
-           return nbytes_;
-        }
-    };
-
-
-    class helper
-    {
-
-        // Private Member Functions
-
-            //- Disallow default bitwise copy construct
-            helper(const helper&);
-
-            //- Disallow default bitwise assignment
-            void operator=(const helper&);
-
-    public:
-        DynamicCharList& buffer;
         ADIOS_FILE *file;
         ADIOS_SELECTION *selection;
         size_t maxLen;
 
         // simple hash of attributes names and their internal position (on read)
-        HashTable<int, fileName> attributes;
+        AttrContainer attributes;
 
-        HashTable<size_t, fileName> variables;
+        VarContainer variables;
 
         wordList regionNames_;
+
         HashTable<wordList> cloudNames_;   // per region
 
-        helper(const DynamicCharList&);
 
-        ~helper();
+    // Private Member Functions
 
+        //- Disallow default bitwise copy construct
+        adiosReader(const adiosReader&);
 
-        bool open(const fileName& bpFile, MPI_Comm comm);
+        //- Disallow default bitwise assignment
+        void operator=(const adiosReader&);
+
+        //- scan opened file for variables/attributes
+        void scan(bool verbose=false);
 
         void select(ADIOS_SELECTION *sel);
 
-        //- Return the number of bytes associated with the dataset
-        //  Values are for the current processor.
-        size_t sizeOf(const char* datasetName, bool verbose=false);
+public:
 
-        //- Return the number of bytes associated with the dataset
-        //  Values are for the current processor.
-        size_t sizeOf(const string& datasetName, bool verbose=false);
+    // Constructors
 
-        //- Retrieve named dataset into our buffer area
-        //  On success the buffer is resized according to the data.
-        //  On failure the buffer is resized to zero.
-        bool getDataSet(const string& datasetName);
+        //- Null constructor
+        adiosReader();
 
-        //- Retrieve named dataset directly into the memory specified
-        bool getDataSet(const string& datasetName, void* data);
+        //- Open specified filename and scan variables
+        adiosReader(const fileName& bpFile, MPI_Comm comm);
 
-        void scan(bool verbose=false);
+    //- Destructor
+        ~adiosReader();
+
+
+        //- Open specified filename, select local process and scan variables
+        bool open(const fileName& bpFile, MPI_Comm comm);
+
+        //- Close file and reset
+        void close();
+
+        //- True if the file has been opened
+        bool isGood() const;
+
+
+        //- The max buffer size for the process local variables
+        inline size_t sizeOf() const;
+
 
         HashTable<fieldInfo> getFieldInfo(const word& regName) const;
+        HashTable<cloudInfo> getCloudInfo(const word& regName) const;
 
-        void close();
+
+        //- True if the specified attribute exists
+        inline bool hasAttribute(const string& varName) const;
+
+        //- True if the specified variable exists
+        inline bool hasVariable(const string& varName) const;
+
 
         //- Read integer attribute if it exists
         bool readIntAttributeIfPresent
         (
             const string& attrName,
-            label &value
+            label& value
         ) const;
 
 
@@ -190,7 +160,7 @@ public:
         bool readStringAttributeIfPresent
         (
             const string& attrName,
-            string &value
+            string& value
         ) const;
 
 
@@ -203,20 +173,275 @@ public:
         ) const;
 
 
+        //- Read integer variable (single-value) if it exists
+        bool readIntVariableIfPresent
+        (
+            const string& varName,
+            label& value
+        ) const;
+
+
+        //- Read scalar variable (single-value) if it exists
+        bool readScalarVariableIfPresent
+        (
+            const string& varName,
+            scalar& value
+        ) const;
+
+
         //- Get a mandatory integer attribute
-        label getIntAttribute(const string& attrName) const;
+        inline label getIntAttribute(const string& name) const;
 
         //- Get a mandatory integer list attribute
-        List<label> getIntListAttribute(const string& attrName) const;
+        inline List<label> getIntListAttribute(const string& name) const;
 
         //- Get a mandatory string attribute
-        string getStringAttribute(const string& attrName) const;
+        inline string getStringAttribute(const string& name) const;
 
         //- Get a mandatory integer attribute
         template<class StringType>
-        List<StringType> getStringListAttribute(const string& attrName) const;
+        inline List<StringType> getStringListAttribute(const string& name) const;
 
-    };
+        //- Get a mandatory integer variable (single-value)
+        inline label getIntVariable(const string& name) const;
+
+        //- Get a mandatory scalar variable (single-value)
+        inline scalar getScalarVariable(const string& name) const;
+
+
+        //- Retrieve the variable directly into the memory specified
+        bool getVariable(const string& varName, void* data) const;
+
+
+        //- Retrieve the variable into our buffer area
+        //  On success the buffer is resized according to the data.
+        //  On failure the buffer is resized to zero.
+        template<class T>
+        size_t getBuffered(const string& varName, DynamicList<T>& buffer) const;
+
+};
+
+
+//- Partial transcription of ADIOS variable information (ADIOS_VARINFO)
+class adiosReader::VarInfo
+{
+    // Private data
+
+        fileName name_;
+        label varid_;
+        enum ADIOS_DATATYPES type_;
+
+        label nElem_;
+        size_t nBytes_;
+
+
+    // Private Member Functions
+
+        //- Disallow default bitwise assignment
+        void operator=(const VarInfo&);
+
+        //- Read variable information from bp file
+        bool readInfo(ADIOS_FILE *file, bool verbose=false);
+
+public:
+
+    // Constructors
+
+        //- Construct empty
+        VarInfo(const char* varName);
+
+        //- Construct empty
+        VarInfo(const string& varName);
+
+        //- Construct by reading variable information from bp file
+        VarInfo(ADIOS_FILE *file, const char* varName, bool verbose=false);
+
+        //- Construct by reading variable information from bp file
+        VarInfo(ADIOS_FILE *file, const string& varName, bool verbose=false);
+
+
+    //- Destructor
+    ~VarInfo();
+
+
+    // Member Functions
+
+        //- The variable name
+        inline const fileName& name() const;
+
+        //- The underlying ADIOS data type
+        inline enum ADIOS_DATATYPES dataType() const;
+
+        //- The process local number of elements (as flattened dimensions)
+        inline label nElem() const;
+
+        //- The byte-size for the process local elements
+        inline size_t sizeOf() const;
+
+};
+
+
+class adiosReader::fieldInfo
+:
+    public fileName
+{
+    word className_;
+    size_t nBytes_;
+
+public:
+
+    fieldInfo()
+    :
+        fileName(),
+        className_(),
+        nBytes_(0)
+    {}
+
+    fieldInfo
+    (
+        const fileName& varName,
+        size_t nbytes,
+        const word& className
+    )
+    :
+        fileName(varName),
+        className_(className),
+        nBytes_(nbytes)
+    {}
+
+
+    //- The region name is before the first /
+    const word regionName() const
+    {
+        return substr(0, find('/')); // not designed for failure
+    }
+
+
+    //- Return the full variable name
+    inline const fileName& fullName() const
+    {
+        return static_cast<const fileName&>(*this);
+    }
+
+
+    //- Return file name (part beyond last /)
+    using fileName::name;
+
+    //- Return directory path name (part before last /)
+    using fileName::path;
+
+
+    //- The class (volScalarField etc)
+    inline const word& type() const
+    {
+        return className_;
+    }
+
+    //- Local size in bytes
+    inline size_t sizeOf() const
+    {
+       return nBytes_;
+    }
+};
+
+
+// currently looks mostly identical to fieldInfo, but this will change
+class adiosReader::cloudInfo
+:
+    public fileName
+{
+    word className_;
+    size_t nBytes_;
+
+    //- Total number of particles (sum of nParticle_ list)
+    label nTotal_;
+
+    //- Number of particles on local process
+    label nParticle_;
+
+    //- blob width
+    label width_;
+
+    //- blob width
+    ParticleBinaryBlob blob_;
+
+
+    bool read(const adiosReader&);
+
+
+public:
+
+
+    cloudInfo();
+    cloudInfo(const fileName& varName);
+    cloudInfo
+    (
+        const adiosReader::VarInfo& varinfo,
+        const adiosReader& reader
+    );
+
+
+    //- The region name is before the first /
+    const word regionName() const
+    {
+        return substr(0, find('/')); // not designed for failure
+    }
+
+
+    //- Return the full variable name
+    inline const fileName& fullName() const
+    {
+        return static_cast<const fileName&>(*this);
+    }
+
+
+    //- Return file name (part beyond last /)
+    using fileName::name;
+
+    //- Return directory path name (part before last /)
+    using fileName::path;
+
+
+    //- The class (volScalarField etc)
+    inline const word& type() const
+    {
+        return className_;
+    }
+
+    //- Total number of particles across all processes
+    label nTotal() const
+    {
+        return nTotal_;
+    }
+
+
+    //- The number of particles on this process
+    label nParticle() const
+    {
+        return nParticle_;
+    }
+
+
+    //- Local size in bytes
+    inline size_t sizeOf() const
+    {
+        return nBytes_;
+    }
+
+
+    //- Blob width in bytes
+    inline size_t width() const
+    {
+        return width_;
+    }
+
+
+    //- The blob information
+    ParticleBinaryBlob blob() const
+    {
+        return blob_;
+    }
+
 
 };
 
@@ -226,6 +451,8 @@ public:
 } // End namespace Foam
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+#include "adiosReaderI.H"
 
 #ifdef NoRepository
     #include "adiosReaderTemplates.C"

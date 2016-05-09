@@ -80,7 +80,7 @@ size_t Foam::adiosWrite::fieldDefine
 
     }
 
-    Pout<< "max stream-size: " << maxLen << endl;
+    // Pout<< "max stream-size: " << maxLen << endl;
 
     return maxLen;
 }

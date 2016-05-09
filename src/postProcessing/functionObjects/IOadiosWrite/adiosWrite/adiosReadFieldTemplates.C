@@ -39,23 +39,21 @@ template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (
     FieldType& field,
-    adiosReader::helper& helper,
+    const adiosReader& reader,
     const adiosReader::fieldInfo& src
 )
 {
-    bool ok = true;
-
     // Read data from file - fatal error if this fails!
-    ok = helper.getDataSet(src);
-    if (ok)
+    size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+    if (nread)
     {
         // read fields via dictionary
-        IBufStream is(helper.buffer, adiosCore::strFormat);
+        IBufStream is(iobuffer_, nread, adiosCore::strFormat);
         dictionary dict(is);
 
-        Pout<<"dictionary: " << field.name() << " with "
-            << dict.toc() << " boundaryField: "
-            << dict.subDict("boundaryField").toc() << endl;
+        // Pout<<"dictionary: " << field.name() << " with "
+        //     << dict.toc() << " boundaryField: "
+        //     << dict.subDict("boundaryField").toc() << endl;
 
         // could also verify dimensions
         field.readField(dict, "internalField");
@@ -74,39 +72,38 @@ bool Foam::adiosWrite::fieldRead
         //     }
     }
 
-    return ok;
+    return nread;
 }
 
 
 template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (
-    adiosReader::helper& helper,
+    const adiosReader& reader,
     const fvMesh& mesh,
     const adiosReader::fieldInfo& src
 )
 {
-    bool ok = true;
-
     // Lookup field
     FieldType& field = const_cast<FieldType&>
     (
         mesh.lookupObject<FieldType>(src.name())
     );
 
-    Pout<< "    readField via dictionary: " << field.name() << endl;
+    // Pout<< "    readField via dictionary: " << field.name() << endl;
 
     // Read data from file - fatal error if this fails!
-    ok = helper.getDataSet(src);
-    if (ok)
+    size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+
+    if (nread)
     {
         // read fields via dictionary
-        IBufStream is(helper.buffer, adiosCore::strFormat);
+        IBufStream is(iobuffer_, nread, adiosCore::strFormat);
         dictionary dict(is);
 
-        Pout<<"dictionary: " << field.name() << " with "
-            << dict.toc() << " boundaryField: "
-            << dict.subDict("boundaryField").toc() << endl;
+        // Pout<<"dictionary: " << field.name() << " with "
+        //     << dict.toc() << " boundaryField: "
+        //     << dict.subDict("boundaryField").toc() << endl;
 
         // could also verify dimensions
         field.readField(dict, "internalField");
@@ -125,7 +122,7 @@ bool Foam::adiosWrite::fieldRead
         //     }
     }
 
-    return ok;
+    return nread;
 }
 
 

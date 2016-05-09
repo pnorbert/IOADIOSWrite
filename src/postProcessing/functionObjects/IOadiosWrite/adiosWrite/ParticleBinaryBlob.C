@@ -262,6 +262,14 @@ void Foam::ParticleBinaryBlob::makeSummary()
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
+Foam::ParticleBinaryBlob::ParticleBinaryBlob()
+:
+    Container(),
+    types_(),
+    names_()
+{}
+
+
 Foam::ParticleBinaryBlob::ParticleBinaryBlob
 (
     const UList<word>& inputTypes,

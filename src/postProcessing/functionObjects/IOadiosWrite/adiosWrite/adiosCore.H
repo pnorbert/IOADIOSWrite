@@ -142,6 +142,49 @@ public:
             const word& constantName  = "constant"
         );
 
+
+        //- Path name for a region
+        inline static const word& regionPath
+        (
+            const word& regionName
+        )
+        {
+            return regionName;
+        }
+
+
+        //- Path name for fields
+        inline static fileName fieldPath
+        (
+            const word& regionName,
+            const fileName& var = fileName::null
+        )
+        {
+            return regionPath(regionName) / "field" / var;
+        }
+
+
+        //- Path name for meshes
+        inline static fileName meshPath
+        (
+            const word& regionName,
+            const fileName& var = fileName::null
+        )
+        {
+            return regionPath(regionName) / "polyMesh" / var;
+        }
+
+
+        //- Path name for clouds
+        inline static fileName cloudPath
+        (
+            const word& regionName,
+            const word& cloudName = word::null
+        )
+        {
+            return regionPath(regionName) / "cloud" / cloudName;
+        }
+
 };
 
 

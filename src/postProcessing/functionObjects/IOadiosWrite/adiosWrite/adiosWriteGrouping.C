@@ -45,9 +45,13 @@ bool Foam::adiosWrite::supportedFieldType
         fieldType == volScalarField::typeName
      || fieldType == volVectorField::typeName
      || fieldType == surfaceScalarField::typeName
-     // || fieldType == volSphericalTensorField::typeName
-     // || fieldType == volSymmTensorField::typeName
-     // || fieldType == volTensorField::typeName
+     || fieldType == volSphericalTensorField::typeName
+     || fieldType == volSymmTensorField::typeName
+     || fieldType == volTensorField::typeName
+
+        // internal fields
+     || fieldType == volScalarField::DimensionedInternalField::typeName
+     || fieldType == volVectorField::DimensionedInternalField::typeName
     );
 }
 
@@ -130,7 +134,7 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
              || findStrings(objectNames_, name)
             );
 
-            if (shouldWrite)
+            if (shouldWrite) // && supportedFieldType(type)
             {
                 Info<< "    name = " << name << " type = " << type << endl;
                 nFields += appendFieldGroup(name, type);
@@ -146,6 +150,7 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
             const word& name = allFields[indices[fieldI]];
             const word& type = mesh.find(name)()->type();
 
+            // && supportedFieldType(type)
             Info<< "    name = " << name << " type = " << type << endl;
             nFields += appendFieldGroup(name, type);
         }
