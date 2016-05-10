@@ -31,8 +31,6 @@ License
 
 void Foam::adiosWrite::open()
 {
-    Info<< "adiosWrite::open:" << endl;
-
     // Create output directory if initially non-existent
     static bool checkdir = true;
     if (checkdir && !isDir(dataDirectory))
@@ -69,7 +67,7 @@ void Foam::adiosWrite::open()
     */
 
     // Print info to terminal
-    Info<< "  adiosWrite: Chosen filename " << dataFile << nl << endl;
+    Info<< "adiosWrite::open (" << dataFile << ")" << endl;
 
     int err = adios_open
     (

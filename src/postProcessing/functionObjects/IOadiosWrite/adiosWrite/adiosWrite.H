@@ -89,21 +89,6 @@ protected:
 
     // Protected classes
 
-        //- Class template used for grouping field types
-        template<class Type>
-        class fieldGroup
-        :
-            public DynamicList<word>
-        {
-        public:
-            //- Construct null
-            fieldGroup()
-            :
-                DynamicList<word>(0)
-            {}
-
-        };
-
         // Per-region info variables grouped together to be able to create a list of them
         class cloudInfo
         {
@@ -213,14 +198,11 @@ protected:
             //- Which (additional) attributes to write for particle data
             wordReList cloudAttribs_;
 
+            //- Fields to be written. Field name as key, class as value
+            HashTable<word> fieldsToWrite_;
+
+            //- Clouds to be processed
             SLList<cloudInfo> cloudInfo_;
-
-            //- Categorized scalar/vector/tensor vol fields
-            fieldGroup<scalar> scalarFields_;
-            fieldGroup<vector> vectorFields_;
-
-            //- Categorized scalar/vector/tensor surf fields
-            fieldGroup<scalar> surfaceScalarFields_;
 
             //- Construct null
             regionInfo()
@@ -253,20 +235,11 @@ protected:
                 const dictionary& topDict = dictionary::null
             );
 
-            //- Clear field groups
+            //- Clear field to be written
             void clearFields()
             {
-                scalarFields_.clear(); // clear it because we will add all of them again and again
-                vectorFields_.clear();
-                surfaceScalarFields_.clear();
+                fieldsToWrite_.clear();
             }
-
-            //- Append fieldName to the appropriate group
-            label appendFieldGroup
-            (
-                const word& fieldName,
-                const word& fieldType
-            );
 
             //- Classify fields into the appropriate groups,
             //  returns the number of fields
@@ -276,20 +249,20 @@ protected:
             //- Path name for regions
             string regionPath() const
             {
-                return name_;
+                return adiosCore::regionPath(name_);
             }
 
             //- Path name for fields
-            fileName fieldPath(const string& var = string::null) const
+            fileName fieldPath(const string& var) const
             {
-                return regionPath() / "field" / var;
+                return adiosCore::fieldPath(name_, var);
             }
 
 
             //- Path name for named cloud
             fileName cloudPath(const string& cloudName) const
             {
-                return regionPath() / "cloud" / cloudName;
+                return adiosCore::cloudPath(name_, cloudName);
             }
 
 
@@ -647,9 +620,18 @@ protected:
             template<class FieldType>
             size_t fieldDefine
             (
-                const fvMesh& mesh,
-                const regionInfo&,
-                const fieldGroup<typename FieldType::value_type>& fields
+                const FieldType& field,
+                const fileName& varPath
+            );
+
+
+            //- Field define for a given type
+            //  Return the maximum associated stream length
+            template<class FieldType>
+            size_t fieldDefineInternal
+            (
+                const FieldType& field,
+                const fileName& varPath
             );
 
             //- Field write wrapper
@@ -659,11 +641,9 @@ protected:
             template<class FieldType>
             void fieldWrite
             (
-                const fvMesh& mesh,
-                const regionInfo&,
-                const fieldGroup<typename FieldType::value_type>& fields
+                const FieldType& field,
+                const fileName& varPath
             );
-
 
             //- Read data for a given volume field type
             bool readVolField
@@ -811,8 +791,7 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #ifdef NoRepository
-    #include "adiosReadFieldTemplates.C"
-    #include "adiosWriteFieldTemplates.C"
+    #include "adiosFieldTemplates.C"
 #endif
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

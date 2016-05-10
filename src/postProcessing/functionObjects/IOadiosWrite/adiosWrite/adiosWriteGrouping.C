@@ -25,119 +25,50 @@ License
 
 #include "adiosWrite.H"
 #include "nullObject.H"
+#include "FlatListOutput.H"
+#include "basicKinematicCloud.H"
 
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-
-bool Foam::adiosWrite::supportedFieldType
-(
-    const word& fieldType
-)
+Foam::label Foam::adiosWrite::regionInfo::classifyFields(const fvMesh& mesh)
 {
-    if (isNull(fieldType) || fieldType.empty())
-    {
-        return false;
-    }
-
-    return
-    (
-        fieldType == volScalarField::typeName
-     || fieldType == volVectorField::typeName
-     || fieldType == surfaceScalarField::typeName
-     || fieldType == volSphericalTensorField::typeName
-     || fieldType == volSymmTensorField::typeName
-     || fieldType == volTensorField::typeName
-
-        // internal fields
-     || fieldType == volScalarField::DimensionedInternalField::typeName
-     || fieldType == volVectorField::DimensionedInternalField::typeName
-    );
-}
-
-
-Foam::label Foam::adiosWrite::regionInfo::appendFieldGroup
-(
-    const word& fieldName,
-    const word& fieldType
-)
-{
-    if (fieldType == volScalarField::typeName)
-    {
-        scalarFields_.append(fieldName);
-        return 1;
-    }
-    else if (fieldType == volVectorField::typeName)
-    {
-        vectorFields_.append(fieldName);
-        return 1;
-    }
-    else if (fieldType == surfaceScalarField::typeName)
-    {
-        surfaceScalarFields_.append(fieldName);
-        return 1;
-    }
-    /*
-    else if (fieldType == volSphericalTensorField::typeName)
-    {
-        sphericalTensorFields_.append(fieldName);
-        return 1;
-    }
-    else if (fieldType == volSymmTensorField::typeName)
-    {
-        symmTensorFields_.append(fieldName);
-        return 1;
-    }
-    else if (fieldType == volTensorField::typeName)
-    {
-        tensorFields_.append(fieldName);
-        return 1;
-    }
-    */
-    else
-    {
-        WarningInFunction
-            << "Field type " << fieldType
-            << " of the field " << fieldName
-            << " is not handled by adiosWrite."
-            << endl;
-    }
-
-    return 0;
-}
-
-
-Foam::label Foam::adiosWrite::regionInfo::classifyFields
-(
-    const fvMesh& mesh
-)
-{
-    label nFields = 0;
-    wordList allFields = mesh.sortedNames();
-
     Info<< "  " << info() << endl;
 
     clearFields(); // clear it because we will add all of them again and again
 
+    HashTable<word> unsupported;
+
+    // these are handled elsewhere:
+    wordHashSet ignore(mesh.names<cloud>());
+
+    const wordList allFields = mesh.sortedNames();
     if (autoWrite())
     {
         forAll(allFields, i)
         {
             const word& name = allFields[i];
+            if (ignore.found(name)) continue;
+
             const regIOobject* obj = mesh.find(name)();
             const word& type = obj->type();
 
             // auto-write field or explicitly requested
-            bool shouldWrite =
+            if
             (
                 obj->writeOpt() == IOobject::AUTO_WRITE
              || findStrings(objectNames_, name)
-            );
-
-            if (shouldWrite) // && supportedFieldType(type)
+            )
             {
-                Info<< "    name = " << name << " type = " << type << endl;
-                nFields += appendFieldGroup(name, type);
+                if (supportedFieldType(type))
+                {
+                    Info<< "    name = " << name << " type = " << type << endl;
+                    fieldsToWrite_.insert(name, type);
+                }
+                else
+                {
+                    unsupported.set(name, type);
+                }
             }
         }
     }
@@ -148,21 +79,48 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
         forAll(indices, fieldI)
         {
             const word& name = allFields[indices[fieldI]];
-            const word& type = mesh.find(name)()->type();
+            if (ignore.found(name)) continue;
 
-            // && supportedFieldType(type)
-            Info<< "    name = " << name << " type = " << type << endl;
-            nFields += appendFieldGroup(name, type);
+            const regIOobject* obj = mesh.find(name)();
+            const word& type = obj->type();
+
+            if (supportedFieldType(type))
+            {
+                Info<< "    name = " << name << " type = " << type << endl;
+                fieldsToWrite_.insert(name, type);
+            }
+            else
+            {
+                unsupported.set(name, type);
+            }
         }
     }
 
-    return nFields;
+    if (!unsupported.empty())
+    {
+        wordList names = unsupported.sortedToc();
+        wordList types(names.size());
+
+        forAll(names, fieldI)
+        {
+            types[fieldI] = unsupported[names[fieldI]];
+        }
+
+        WarningInFunction
+            << nl
+            << unsupported.size() << " fields not handled by adiosWrite" << nl
+            << "  names: " << FlatListOutput<word>(names) << nl
+            << "  types: " << FlatListOutput<word>(types) << nl << endl;
+    }
+
+
+    return fieldsToWrite_.size();
 }
 
 
 Foam::label Foam::adiosWrite::classifyFields()
 {
-    Info<< endl << "Foam::adiosWrite::classifyFields: " << endl;
+    Info<< endl << "Foam::adiosWrite::classifyFields:" << endl;
 
     label nFields = 0;
     forAll(regions_, i)

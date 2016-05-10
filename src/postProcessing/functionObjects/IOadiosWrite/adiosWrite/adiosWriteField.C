@@ -28,23 +28,121 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
+bool Foam::adiosWrite::supportedFieldType(const word& fieldType)
+{
+    if (isNull(fieldType) || fieldType.empty())
+    {
+        return false;
+    }
+
+    return
+    (
+        fieldType == volScalarField::typeName
+     || fieldType == volVectorField::typeName
+     || fieldType == surfaceScalarField::typeName
+     || fieldType == volSphericalTensorField::typeName
+     || fieldType == volSymmTensorField::typeName
+     || fieldType == volTensorField::typeName
+
+        // internal fields
+     || fieldType == volScalarField::DimensionedInternalField::typeName
+     || fieldType == volVectorField::DimensionedInternalField::typeName
+    );
+}
+
+
 size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 {
     Info<< "  adiosWrite::fieldDefine: " << rInfo.info() << endl;
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
-
     size_t bufLen = 0;
     size_t maxLen = 0;
 
-    bufLen = fieldDefine<volScalarField>(mesh, rInfo, rInfo.scalarFields_);
-    maxLen = Foam::max(maxLen, bufLen);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
-    bufLen = fieldDefine<volVectorField>(mesh, rInfo, rInfo.vectorFields_);
-    maxLen = Foam::max(maxLen, bufLen);
+    wordList fieldNames = rInfo.fieldsToWrite_.sortedToc();
+    forAll(fieldNames, fieldI)
+    {
+        const word& fieldName = fieldNames[fieldI];
+        const word& fieldType = rInfo.fieldsToWrite_[fieldName];
+        const fileName varPath = rInfo.fieldPath(fieldName);
 
-    bufLen = fieldDefine<surfaceScalarField>(mesh, rInfo, rInfo.surfaceScalarFields_);
-    maxLen = Foam::max(maxLen, bufLen);
+        if (!(static_cast<const objectRegistry&>(mesh).found(fieldName)))
+        {
+            continue;
+        }
+
+        regIOobject* obj = mesh.find(fieldName)();
+
+        if (fieldType == volScalarField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<volScalarField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volVectorField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<volVectorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == surfaceScalarField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<surfaceScalarField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volSphericalTensorField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<volSphericalTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volSymmTensorField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<volSymmTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volTensorField::typeName)
+        {
+            bufLen = fieldDefine
+            (
+                static_cast<volTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volScalarField::DimensionedInternalField::typeName)
+        {
+            // internal fields
+            bufLen = fieldDefineInternal
+            (
+                static_cast<volScalarField::DimensionedInternalField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volVectorField::DimensionedInternalField::typeName)
+        {
+            // internal fields
+            bufLen = fieldDefineInternal
+            (
+                static_cast<volVectorField::DimensionedInternalField&>(*obj),
+                varPath
+            );
+        }
+
+        maxLen = Foam::max(maxLen, bufLen);
+    }
 
     return maxLen;
 }
@@ -56,9 +154,87 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 
-    fieldWrite<volScalarField>(mesh, rInfo, rInfo.scalarFields_);
-    fieldWrite<volVectorField>(mesh, rInfo, rInfo.vectorFields_);
-    fieldWrite<surfaceScalarField>(mesh, rInfo, rInfo.surfaceScalarFields_);
+    wordList fieldNames = rInfo.fieldsToWrite_.sortedToc();
+    forAll(fieldNames, fieldI)
+    {
+        const word& fieldName = fieldNames[fieldI];
+        const word& fieldType = rInfo.fieldsToWrite_[fieldName];
+        const fileName varPath = rInfo.fieldPath(fieldName);
+
+        if (!static_cast<const objectRegistry&>(mesh).found(fieldName))
+        {
+            continue;
+        }
+
+        regIOobject* obj = mesh.find(fieldName)();
+
+        if (fieldType == volScalarField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<volScalarField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volVectorField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<volVectorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == surfaceScalarField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<surfaceScalarField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volSphericalTensorField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<volSphericalTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volSymmTensorField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<volSymmTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volTensorField::typeName)
+        {
+            fieldWrite
+            (
+                static_cast<volTensorField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volScalarField::DimensionedInternalField::typeName)
+        {
+            // internal fields
+            fieldWrite
+            (
+                static_cast<volScalarField::DimensionedInternalField&>(*obj),
+                varPath
+            );
+        }
+        else if (fieldType == volVectorField::DimensionedInternalField::typeName)
+        {
+            // internal fields
+            fieldWrite
+            (
+                static_cast<volVectorField::DimensionedInternalField&>(*obj),
+                varPath
+            );
+        }
+    }
 }
 
 

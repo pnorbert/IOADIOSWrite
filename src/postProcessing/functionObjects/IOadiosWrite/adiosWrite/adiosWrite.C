@@ -27,6 +27,7 @@ License
 #include "dictionary.H"
 #include "HashSet.H"
 #include "scalar.H"
+#include "FlatListOutput.H"
 
 // some internal pre-processor stringifications
 #undef STRINGIFY
@@ -75,7 +76,7 @@ void Foam::adiosWrite::regionInfo::read
 
     // Do a basic check to see if the objectNames_ is accessible
 
-    DynamicList<word> missingObjects(objectNames_.size());
+    DynamicList<word> missing(objectNames_.size());
     forAll(objectNames_, i)
     {
         if (mesh.foundObject<regIOobject>(objectNames_[i]))
@@ -84,28 +85,21 @@ void Foam::adiosWrite::regionInfo::read
         }
         else
         {
-            missingObjects.append(objectNames_[i]);
+            missing.append(objectNames_[i]);
         }
     }
 
-    if (missingObjects.size())
+    if (missing.size())
     {
-        // make list more readable (single line)
-        OStringStream list;
-        forAll(missingObjects, i)
-        {
-            list << ' ' << missingObjects[i];
-        }
-
         WarningInFunction
-            << missingObjects.size() << " objects not found in database:" << nl
-            << "   " << list.str().c_str() << endl;
+            << missing.size() << " objects not found in database:" << nl
+            << "   " << FlatListOutput<word>(missing) << endl;
     }
 
     // Also print the cloud names
     forAll(cloudNames_, i)
     {
-        Info<< " " << cloudNames_[i];
+        Info<< ' ' << cloudNames_[i];
     }
     Info<< nl << endl;
 }
@@ -114,9 +108,9 @@ void Foam::adiosWrite::regionInfo::read
 size_t Foam::adiosWrite::defineVars(bool updateMesh)
 {
     Info<< "adiosWrite::defineVars(" << (updateMesh ? "updateMesh" : "")
-        << ") has been called at time "
-        << obr_.time().timeName()
-        << " time index " << obr_.time().timeIndex() << endl;
+        << ") called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
 
     outputSize_ = 0;
     size_t maxLen = 0;
@@ -235,9 +229,9 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
 
 void Foam::adiosWrite::deleteDefinitions()
 {
-    // Info<< "adiosWrite::deleteDefinitions() has been called at time "
-    //     << obr_.time().timeName()
-    //     << " time index " << obr_.time().timeIndex() << endl;
+    // Info<< "adiosWrite::deleteDefinitions() called at time "
+    //     << obr_.time().timeName() << " time index "
+    //     << obr_.time().timeIndex() << endl;
 
     // In ADIOS we need to remove all variable definitions in order
     // to make a new list of definitions in case the mesh changes
@@ -543,26 +537,26 @@ void Foam::adiosWrite::execute()
 void Foam::adiosWrite::end()
 {
     // Nothing to be done here
-    Info<< "adiosWrite::end() has been called at time "
-        << obr_.time().timeName()
-        << " time index " << obr_.time().timeIndex() << endl;
+    Info<< "adiosWrite::end() called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
 }
 
 
 void Foam::adiosWrite::timeSet()
 {
     // Nothing to be done here
-    Info<< "adiosWrite::timeSet() has been called at time "
-        << obr_.time().timeName()
-        << " time index " << obr_.time().timeIndex() << endl;
+    Info<< "adiosWrite::timeSet() called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
 }
 
 
 void Foam::adiosWrite::write()
 {
-    Info<< "adiosWrite::write() has been called at "
-        << "time " << obr_.time().timeName()
-        << " time index " << obr_.time().timeIndex() << endl;
+    Info<< "adiosWrite::write() called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
 
     size_t maxLen = 0;
     size_t bufLen = 0;
