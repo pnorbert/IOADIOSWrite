@@ -27,18 +27,25 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-size_t Foam::adiosWrite::meshDefine(regionInfo& r)
+size_t Foam::adiosWrite::meshDefine
+(
+    const fvMesh& mesh,
+    const bool updateMesh
+)
 {
+    if (!updateMesh)
+    {
+        return 0;
+    }
+
+    Info<< "adiosWrite::meshDefine: " << mesh.name() << " at time "
+        << mesh.time().timeName() << endl;
+
+    const fileName varPath = adiosCore::meshPath(mesh.name());
+
     OutputCounter os(adiosCore::strFormat);
     size_t bufLen = 0;
     size_t maxLen = 0;
-
-    Info<< "adiosWrite::meshDefine: " << r.info() << " at time "
-        << time_.timeName() << endl;
-
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
-
-    fileName varPath = r.meshPath();
 
     // summary information
     defineIntVariable(varPath/"nPoints");       // polyMesh/nPoints
@@ -90,21 +97,28 @@ size_t Foam::adiosWrite::meshDefine(regionInfo& r)
 }
 
 
-void Foam::adiosWrite::meshWrite(const regionInfo& r)
+void Foam::adiosWrite::meshWrite
+(
+    const fvMesh& mesh,
+    const bool updateMesh
+)
 {
-    Info<< "adiosWrite::meshWrite: " << r.info() << " at time "
-        << time_.timeName() << endl;
+    if (!updateMesh)
+    {
+        return;
+    }
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+    Info<< "adiosWrite::meshWrite: " << mesh.name() << " at time "
+        << mesh.time().timeName() << endl;
 
-    fileName varPath = r.meshPath();
+    const fileName varPath = adiosCore::meshPath(mesh.name());
 
     writeIntVariable(varPath/"nPoints", mesh.nPoints());
     writeIntVariable(varPath/"nCells",  mesh.nCells());
     writeIntVariable(varPath/"nFaces",  mesh.nFaces());
     writeIntVariable(varPath/"nInternalFaces", mesh.nInternalFaces());
 
-    // polyMesh/points
+    // polyMesh/points: 2D array (N points x 3 coordinates)
     writeVariable(varPath/"points", mesh.points());
 
     // polyMesh/faces - save in compact form

@@ -285,11 +285,6 @@ protected:
                 return regionPath() / "field" / var;
             }
 
-            //- Path name for meshes
-            fileName meshPath(const string& var = string::null) const
-            {
-                return regionPath() / "polyMesh" / var;
-            }
 
             //- Path name for named cloud
             fileName cloudPath(const string& cloudName) const
@@ -708,19 +703,27 @@ protected:
 
       // Functions for handling particle cloud data
 
-            //- Cloud define wrapper
+            //- Define ADIOS cloud variables/attributes
             size_t cloudDefine(regionInfo&);
 
-            //- Cloud write wrapper
+            //- Write ADIOS cloud variables
             void cloudWrite(const regionInfo&);
 
         // Functions for handling mesh
 
-            //- Mesh define wrapper
-            size_t meshDefine(regionInfo&);
+            //- Define ADIOS mesh variables
+            size_t meshDefine
+            (
+                const fvMesh&,
+                const bool updateMesh
+            );
 
-            //- Mesh write wrapper
-            void meshWrite(const regionInfo&);
+            //- Write ADIOS mesh variables
+            void meshWrite
+            (
+                const fvMesh&,
+                const bool updateMesh
+            );
 
 
         // Miscallenous definitions

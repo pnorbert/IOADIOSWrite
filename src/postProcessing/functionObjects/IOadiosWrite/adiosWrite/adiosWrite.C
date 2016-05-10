@@ -219,11 +219,8 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         defineListAttribute("patch-names", varPath, pNames);
         defineListAttribute("patch-types", varPath, pTypes);
 
-        if (updateMesh)
-        {
-            bufLen = meshDefine(rInfo);
-            maxLen = Foam::max(maxLen, bufLen);
-        }
+        bufLen = meshDefine(mesh, updateMesh);
+        maxLen = Foam::max(maxLen, bufLen);
 
         bufLen = fieldDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
@@ -577,8 +574,21 @@ void Foam::adiosWrite::write()
         // Write info to terminal
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
-        // Re-write mesh if dynamic or first time
-        const bool updateMesh = (timeSteps_ == 0 || primaryMesh_.changing());
+        // Re-write mesh if first time or any of the meshes changed
+        bool updateMesh = (timeSteps_ == 0);
+        if (!updateMesh)
+        {
+            HashTable<const fvMesh*> allMeshes = time_.lookupClass<fvMesh>();
+
+            forAllConstIter(HashTable<const fvMesh*>, allMeshes, iter)
+            {
+                updateMesh = (*iter)->changing();
+                if (updateMesh)
+                {
+                    break;
+                }
+            }
+        }
 
 #if 0
         /* FIXME: code snippet to wait gdb attach on rank 0 process */
@@ -646,11 +656,10 @@ void Foam::adiosWrite::write()
         {
             regionInfo& rInfo = regions_[regionI];
 
+            const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+
             // Re-write mesh if dynamic or first time
-            if (updateMesh)
-            {
-                meshWrite(rInfo);
-            }
+            meshWrite(mesh, updateMesh);
 
             // Write field data
             fieldWrite(rInfo);
