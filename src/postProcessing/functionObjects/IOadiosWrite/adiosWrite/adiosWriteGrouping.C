@@ -31,9 +31,16 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-Foam::label Foam::adiosWrite::regionInfo::classifyFields(const fvMesh& mesh)
+Foam::label Foam::adiosWrite::regionInfo::classifyFields
+(
+    const fvMesh& mesh,
+    bool verbose
+)
 {
-    Info<< "  " << info() << endl;
+    if (verbose)
+    {
+        Info<< "  " << info() << endl;
+    }
 
     clearFields(); // clear it because we will add all of them again and again
 
@@ -62,8 +69,13 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields(const fvMesh& mesh)
             {
                 if (supportedFieldType(type))
                 {
-                    Info<< "    name = " << name << " type = " << type << endl;
                     fieldsToWrite_.insert(name, type);
+                    if (verbose)
+                    {
+                        Info<< "    name = " << name
+                            << " type = " << type
+                            << endl;
+                    }
                 }
                 else
                 {
@@ -86,8 +98,13 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields(const fvMesh& mesh)
 
             if (supportedFieldType(type))
             {
-                Info<< "    name = " << name << " type = " << type << endl;
                 fieldsToWrite_.insert(name, type);
+                if (verbose)
+                {
+                    Info<< "    name = " << name
+                        << " type = " << type
+                        << endl;
+                }
             }
             else
             {
@@ -118,16 +135,24 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields(const fvMesh& mesh)
 }
 
 
-Foam::label Foam::adiosWrite::classifyFields()
+Foam::label Foam::adiosWrite::classifyFields(bool verbose)
 {
-    Info<< endl << "Foam::adiosWrite::classifyFields:" << endl;
+    if (verbose)
+    {
+        Info<< endl << "Foam::adiosWrite::classifyFields:" << endl;
+    }
+
 
     label nFields = 0;
     forAll(regions_, i)
     {
         regionInfo& r = regions_[i];
 
-        nFields += r.classifyFields(time_.lookupObject<fvMesh>(r.name_));
+        nFields += r.classifyFields
+        (
+            time_.lookupObject<fvMesh>(r.name_),
+            verbose
+        );
     }
 
     return nFields;

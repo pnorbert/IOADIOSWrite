@@ -45,6 +45,7 @@ Author
 
 #include "adiosCore.H"
 #include "adiosReader.H"
+#include "adiosTime.H"
 
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
@@ -243,7 +244,11 @@ protected:
 
             //- Classify fields into the appropriate groups,
             //  returns the number of fields
-            label classifyFields(const fvMesh& mesh);
+            label classifyFields
+            (
+                const fvMesh& mesh,
+                bool verbose = false
+            );
 
 
             //- Path name for regions
@@ -293,6 +298,12 @@ protected:
         //- Reference to the time database
         const Time& time_;  // = primaryMesh_.time()
 
+        //- track time index from restart (avoid write immediately after restart)
+        int restartIndex_;
+
+        // Restart time requested
+        scalar restartTime_;
+
         //- List of regions holding all data needed (mesh, names)
         List<regionInfo> regions_;
 
@@ -307,9 +318,6 @@ protected:
 
         //- Write interval (in number of iterations)
         label writeInterval_;
-
-        // Restart time requested
-        scalar restartTime_;
 
         // Used to track when to write
         label nextWrite_;
@@ -709,7 +717,10 @@ protected:
         // Miscallenous definitions
 
             //- Classify field types, returns the number of fields
-            label classifyFields();
+            label classifyFields
+            (
+                bool verbose = false
+            );
 
             //- Disallow default bitwise copy construct
             adiosWrite(const adiosWrite&);
@@ -725,13 +736,16 @@ protected:
 
         // Restart functions
 
-            bool readData(const fileName&);
-            bool readData(const instant& when);
+            adiosTime readData(const fileName&);
+            adiosTime readData(const instant& when);
 
             //- Read data from a given time
             // attempt to read data for all variables existing in memory
             // returns true on success, false on failure
-            bool readData();
+            adiosTime readData();
+
+            //- Execute, handles restart at first call if requested
+            bool restart();
 
 public:
 

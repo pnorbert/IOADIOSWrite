@@ -44,6 +44,7 @@ SourceFiles
 #include "adios.h"
 #include "adios_read.h"
 
+#include "adiosTime.H"
 #include "ParticleBinaryBlob.H"
 
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //

@@ -23,73 +23,66 @@ License
 
 \*---------------------------------------------------------------------------*/
 
+#include "adiosTime.H"
 #include "adiosReader.H"
 
-// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
-Foam::adiosReader::cloudInfo::cloudInfo()
-:
-    fileName(),
-    className_(),
-    nBytes_(0),
-    nTotal_(0),
-    nParticle_(0),
-    width_(0)
-{}
-
-
-Foam::adiosReader::cloudInfo::cloudInfo(const fileName& varName)
-:
-    fileName(varName),
-    className_(),
-    nBytes_(0),
-    nTotal_(0),
-    nParticle_(0),
-    width_(0)
-{}
-
-
-Foam::adiosReader::cloudInfo::cloudInfo
-(
-    const adiosReader::VarInfo& varinfo,
-    const adiosReader& reader
-)
-:
-    fileName(varinfo.name()),
-    className_(),
-    nBytes_(varinfo.sizeOf()),
-    nTotal_(0),
-    nParticle_(0),
-    width_(0)
+namespace Foam
 {
-    read(reader);
+    template<>
+    const char* Foam::NamedEnum
+    <
+        Foam::adiosTime::attrType,
+        4
+    >::names[] =
+    {
+        "/time/index",
+        "/time/value",
+        "/time/deltaT",
+        "/time/deltaT0"
+    };
 }
 
 
-// * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
+const Foam::NamedEnum<Foam::adiosTime::attrType, 4>
+Foam::adiosTime::attr;
 
-bool Foam::adiosReader::cloudInfo::read
-(
-    const adiosReader& reader
-)
+
+// * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
+
+Foam::adiosTime::adiosTime()
+:
+    index_(-1),
+    value_(VGREAT),
+    deltaT_(0),
+    deltaT0_(0)
+{}
+
+
+Foam::adiosTime::adiosTime(const TimeState& t)
+:
+    index_(t.timeIndex()),
+    value_(t.timeOutputValue()),
+    deltaT_(t.deltaT().value()),
+    deltaT0_(t.deltaT0().value())
+{}
+
+
+Foam::adiosTime::adiosTime(const adiosReader& reader)
+:
+    index_(reader.getIntVariable(attr[INDEX])),
+    value_(reader.getScalarVariable(attr[VALUE])),
+    deltaT_(reader.getScalarVariable(attr[DT])),
+    deltaT0_(reader.getScalarVariable(attr[DT0]))
+{}
+
+
+// * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
+
+bool Foam::adiosTime::valid() const
 {
-    const fileName& varName = fullName();
-
-    nParticle_ = reader.getIntVariable(varName/"nParticle");
-
-    className_ = reader.getStringAttribute(varName/"class");
-    nTotal_    = reader.getIntAttribute(varName/"nParticle");
-    width_     = reader.getIntAttribute(varName/"size");
-
-    blob_ = ParticleBinaryBlob
-    (
-        reader.getStringListAttribute<word>(varName/"types"),
-        reader.getStringListAttribute<word>(varName/"names"),
-        reader.getIntListAttribute(varName/"offset"),
-        reader.getIntListAttribute(varName/"byte-size")
-    );
-
-    return nBytes_ > 0;
+    return index_ > 0;
 }
 
 

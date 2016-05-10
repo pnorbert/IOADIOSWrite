@@ -38,7 +38,7 @@ License
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
-bool Foam::adiosWrite::readData(const fileName& bpFile)
+Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
 {
     Info<< " Read data of step " << bpFile << endl;
 
@@ -46,7 +46,7 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
 
     if (!reader.isGood())
     {
-        return false;
+        return adiosTime();
     }
 
     iobuffer_.reserve(reader.sizeOf());
@@ -106,25 +106,26 @@ bool Foam::adiosWrite::readData(const fileName& bpFile)
          }
     }
 
+    adiosTime timeInfo(reader);
+
     reader.close();
 
-    return true;
+    return timeInfo;
 }
 
 
-bool Foam::adiosWrite::readData(const instant& when)
+Foam::adiosTime Foam::adiosWrite::readData(const instant& when)
 {
     Info<< " Read data of step " << when.name() << endl;
     return readData(when.name());
 }
 
 
-bool Foam::adiosWrite::readData()
+Foam::adiosTime Foam::adiosWrite::readData()
 {
     Info<< " Read data of step " << obr_.time().timeName() << endl;
     return readData(dataDirectory/obr_.time().timeName() + ".bp");
 }
-
 
 
 bool Foam::adiosWrite::readVolField

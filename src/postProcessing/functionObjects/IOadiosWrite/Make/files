@@ -1,6 +1,7 @@
 adiosWrite/adiosTypes.C
 
 adiosWrite/adiosCore.C
+adiosWrite/adiosTime.C
 adiosWrite/adiosReader.C
 adiosWrite/adiosReaderCloudInfo.C
 adiosWrite/adiosReaderVarInfo.C

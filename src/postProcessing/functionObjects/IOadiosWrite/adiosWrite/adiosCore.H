@@ -104,9 +104,6 @@ public:
     //- OpenFOAM global attributes within ADIOS file
     static const string foamAttribute;
 
-    //- General time variable within ADIOS file
-    static const string timeAttribute;
-
     typedef OCompactStringStream    OutputStringStreamer;
     typedef OCompactBufStream       OutputBufStreamer;
     typedef OCompactCountStream     OutputCounter;
@@ -141,7 +138,6 @@ public:
             const fileName& directory = fileName::null,
             const word& constantName  = "constant"
         );
-
 
         //- Path name for a region
         inline static const word& regionPath

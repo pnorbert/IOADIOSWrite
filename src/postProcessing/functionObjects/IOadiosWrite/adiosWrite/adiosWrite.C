@@ -186,10 +186,10 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     }
 
     // General information (as variable)
-    defineIntVariable(adiosCore::timeAttribute/"index");
-    defineScalarVariable(adiosCore::timeAttribute/"value");
-    defineScalarVariable(adiosCore::timeAttribute/"deltaT");
-    defineScalarVariable(adiosCore::timeAttribute/"deltaT0");
+    defineIntVariable(adiosTime::attr[adiosTime::INDEX]);
+    defineScalarVariable(adiosTime::attr[adiosTime::VALUE]);
+    defineScalarVariable(adiosTime::attr[adiosTime::DT]);
+    defineScalarVariable(adiosTime::attr[adiosTime::DT0]);
 
     forAll(regions_, regionI)
     {
@@ -255,7 +255,8 @@ Foam::adiosWrite::adiosWrite
     adiosCore(groupName),
     obr_(obr),
     primaryMesh_(refCast<const fvMesh>(obr)),
-    time_(primaryMesh_.time())
+    time_(primaryMesh_.time()),
+    restartIndex_(-1)
 {
     Info<< "adiosWrite constructor called (" << Pstream::nProcs()
         << " procs) with primary mesh " << primaryMesh_.name() << endl;
@@ -320,14 +321,6 @@ Foam::adiosWrite::~adiosWrite()
 
 void Foam::adiosWrite::read(const dictionary& dict)
 {
-    // wordList toc_(dict.toc());
-    // forAll(toc_, i)
-    // {
-    //     Info<< " TOC "<< i<<": " << toc_[i] << endl;
-    // }
-    // Info<< endl << endl;
-
-
     // test with auto-write
     Switch autoWrite = true;
     autoWrite.readIfPresent("autoWrite", dict); // top-level auto-write?
@@ -478,6 +471,57 @@ void Foam::adiosWrite::read(const dictionary& dict)
 }
 
 
+bool Foam::adiosWrite::restart()
+{
+    static bool restarted = false;
+
+    if (restarted || restartTime_ == VGREAT)
+    {
+        return false;
+    }
+    restarted = true; // even if it fails don't try again
+
+    Info<< "adiosWrite::restart(" << restartTime_ << ")" << endl;
+
+    const instantList adiosTimes = adiosCore::findTimes();
+    const label adiosTimeIndex = Time::findClosestTimeIndex(adiosTimes, restartTime_);
+
+    if (adiosTimeIndex < 0)
+    {
+        FatalErrorInFunction
+            << "No appropriate ADIOS restart found for time " << restartTime_
+            << exit(FatalIOError);
+    }
+
+    Info<<"restart from adios " << adiosTimes[adiosTimeIndex] << endl;
+
+    // Classify fields in the object space,
+    // then read data from restart file for each
+    classifyFields();
+
+    adiosTime bpTime = readData(adiosTimes[adiosTimeIndex]);
+    if (bpTime.valid())
+    {
+        Time& t = const_cast<Time&>(obr_.time());
+        t.setTime(bpTime.timeValue(), bpTime.timeIndex());
+
+        Info<< "Time = " << t.timeOutputValue() << " index "
+            << t.timeIndex() << endl;
+
+        restartIndex_ = bpTime.timeIndex();
+        // TODO: handle deltaT, deltaT0 etc
+    }
+    else
+    {
+        FatalErrorInFunction
+            << "Restart reading failed for time " << restartTime_
+            << exit(FatalIOError);
+    }
+
+    return true; // even if it fails we don't try it again
+}
+
+
 void Foam::adiosWrite::execute()
 {
     // execute() is called at the first non-zero time, after the calculation,
@@ -485,51 +529,15 @@ void Foam::adiosWrite::execute()
     // This is a good point to do restart because fields created by other
     // function objects exist at this point (e.g. fieldAverage variables)
 
+    Info<< "adiosWrite::execute() called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
+
     static bool restarted = false;
-
-    Info<< "adiosWrite::execute() timeOutputValue  = "
-        << obr_.time().timeOutputValue() << endl;
-
-    const scalar dt = obr_.time().deltaTValue();
-    if (!restarted && (obr_.time().value() + 0.5*dt > restartTime_))
+    if (!restarted)
     {
-        Info<< "  restart time requested was " << restartTime_
-            << ". Let's do restart now." << endl;
-
-        restarted = true; // even if it fails we don't try it again
-
-        // Classify fields in the object space, then read data from restart
-        // file for each
-        classifyFields();
-
-        Time& time = const_cast<Time&>(obr_.time());
-        const instantList times = time.times();
-        const label timeIndex = Time::findClosestTimeIndex(times, restartTime_);
-        time.setTime(times[timeIndex], timeIndex);
-
-        // Info<<"times: " << times << endl;
-        // Info<<"look for times in " << dataDirectory << endl;
-
-        const instantList adiosTimes = adiosCore::findTimes();
-
-        // Info<<"adios-times: " << adiosTimes << endl;
-        const label adiosTimeIndex = Time::findClosestTimeIndex(adiosTimes, restartTime_);
-        if (adiosTimeIndex < 0)
-        {
-            FatalErrorInFunction
-                << "No appropriate ADIOS restart found for time " << restartTime_
-                << exit(FatalIOError);
-        }
-        else
-        {
-            Info<<"restart from adios " << adiosTimes[adiosTimeIndex] << endl;
-            if (!readData(adiosTimes[adiosTimeIndex]))
-            {
-                FatalErrorInFunction
-                    << "Restart reading failed for time " << restartTime_
-                    << exit(FatalIOError);
-            }
-        }
+        restarted = true;
+        restart();
     }
 }
 
@@ -558,14 +566,20 @@ void Foam::adiosWrite::write()
         << obr_.time().timeName() << " time index "
         << obr_.time().timeIndex() << endl;
 
-    size_t maxLen = 0;
-    size_t bufLen = 0;
-
-    // Check if we are going to write
-    //if ( timeSteps_ == 0 )
-    if (timeSteps_ == nextWrite_)
+    const bool writeNow = (timeSteps_ == nextWrite_);
+    if (writeNow)
     {
-        // Write info to terminal
+        // time of next write
+        nextWrite_ = timeSteps_ + writeInterval_;
+    }
+
+    if (writeNow && restartIndex_ == obr_.time().timeIndex())
+    {
+        Info<< "Writing ADIOS data for time " << obr_.time().timeName()
+            << " ... skipped at restart time" << endl;
+    }
+    else if (writeNow)
+    {
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
         // Re-write mesh if first time or any of the meshes changed
@@ -610,12 +624,12 @@ void Foam::adiosWrite::write()
         // -> simply update everything for simplicity
         deleteDefinitions();
 
-        classifyFields();
+        classifyFields(true);
 
         // ADIOS requires to define all variables before writing anything
         Info<< "Define variables in ADIOS" << endl;
-        bufLen = defineVars(updateMesh);
-        maxLen = Foam::max(maxLen, bufLen);
+
+        size_t maxLen = defineVars(updateMesh);
 
         // Pout<<"reserve write buffer " << maxLen << endl;
         iobuffer_.reserve(maxLen); // NEEDS attention if iobuffer is not char!
@@ -627,23 +641,23 @@ void Foam::adiosWrite::write()
         // General information (as variable)
         writeIntVariable
         (
-            adiosCore::timeAttribute/"index",
+            adiosTime::attr[adiosTime::INDEX],
             time_.timeIndex()
         );
         writeScalarVariable
         (
-            adiosCore::timeAttribute/"value",
+            adiosTime::attr[adiosTime::VALUE],
             time_.timeOutputValue()
         );
         writeScalarVariable
         (
-            adiosCore::timeAttribute/"deltaT",
-            time_.deltaT().value()
+            adiosTime::attr[adiosTime::DT],
+            time_.deltaTValue()
         );
         writeScalarVariable
         (
-            adiosCore::timeAttribute/"deltaT0",
-            time_.deltaT0().value()
+            adiosTime::attr[adiosTime::DT0],
+            time_.deltaT0Value()
         );
 
         forAll(regions_, regionI)
@@ -665,13 +679,10 @@ void Foam::adiosWrite::write()
         // Close the ADIOS dataset at every timestep. It must be closed!
         // Data is flushed from memory at this point
         close();
-
-        // Calculate time of next write
-        nextWrite_ = timeSteps_ + writeInterval_;
     }
 
     // Update counter
-    timeSteps_++;
+    ++timeSteps_;
 }
 
 
