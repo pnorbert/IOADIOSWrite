@@ -437,7 +437,7 @@ public:
 
 
     //- The blob information
-    ParticleBinaryBlob blob() const
+    const ParticleBinaryBlob& blob() const
     {
         return blob_;
     }

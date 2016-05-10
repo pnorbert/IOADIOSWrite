@@ -104,41 +104,10 @@ void Foam::adiosReader::scan(bool verbose)
         if
         (
             readStringListAttributeIfPresent(regName/"clouds", names)
-         && names.empty()
+         && !names.empty()
         )
         {
             cloudNames_.insert(regName, names);
-        }
-    }
-
-    // for diagnostics: expect these type of entries
-    // regionName/cloudName/nParticle
-    // regionName/cloudName/size
-    // regionName/cloudName/names
-    // regionName/cloudName/types
-    // regionName/cloudName/offset
-    // regionName/cloudName/byte-size
-    forAll(regionNames_, regI)
-    {
-        const word& regName = regionNames_[regI];
-        if (cloudNames_.found(regName))
-        {
-            const wordList& cloudNames = cloudNames_[regName];
-
-            forAll(cloudNames, cloudI)
-            {
-                fileName varPath = adiosCore::cloudPath(regName, cloudNames[cloudI]);
-                label nTotal = getIntAttribute(varPath/"nParticle");
-                label nBytes = getIntAttribute(varPath/"size");
-
-                wordList fragName = getStringListAttribute<word>(varPath/"names");
-                wordList fragType = getStringListAttribute<word>(varPath/"types");
-
-                labelList fragOff  = getIntListAttribute(varPath/"offset");
-                labelList fragSize = getIntListAttribute(varPath/"byte-size");
-            }
-
-            // cloudNames_.insert(regName, names);
         }
     }
 

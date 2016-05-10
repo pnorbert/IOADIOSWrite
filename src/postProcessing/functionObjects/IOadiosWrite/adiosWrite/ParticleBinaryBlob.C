@@ -25,6 +25,7 @@ License
 
 #include "ParticleBinaryBlob.H"
 
+#include "particle.H"
 #include "IStringStream.H"
 #include "token.H"
 
@@ -39,22 +40,41 @@ void Foam::ParticleBinaryBlob::clear()
 }
 
 
-void Foam::ParticleBinaryBlob::setTypes(const UList<word>& inputTypes)
+void Foam::ParticleBinaryBlob::setTypes
+(
+    const UList<word>& inputTypes,
+    const bool raw
+)
 {
     clear();
+    size_t offset = (raw ? 0 : 1);
 
-    size_t offset = 0;
     forAll(inputTypes, elemI)
     {
         Fragment frag(inputTypes[elemI], offset);
-        offset += frag.totalWidth(); // or offset = frag.end();
+        offset = frag.end();
+
+        // This is a hack, but we are presented with at least two blocks
+        // of binary content, each of which is surrounded by '()'
+        // content1 => (particle)
+        // content2 => (other)
+
+        if (!raw && offset == Foam::particle::sizeofFields + 1)
+        {
+            // 2 == closing ')' from particle + opening '(' for next sequence
+            offset += 2;
+        }
 
         append(frag);
     }
 }
 
 
-void Foam::ParticleBinaryBlob::setTypes(Istream& is)
+void Foam::ParticleBinaryBlob::setTypes
+(
+    Istream& is,
+    const bool raw
+)
 {
     DynamicList<word> lst(32);
 
@@ -79,18 +99,25 @@ void Foam::ParticleBinaryBlob::setTypes(Istream& is)
         }
     }
 
-    setTypes(lst);
+    setTypes(lst, raw);
 }
 
 
-void Foam::ParticleBinaryBlob::setTypes(const string& inputTypes)
+void Foam::ParticleBinaryBlob::setTypes
+(
+    const string& inputTypes,
+    const bool raw
+)
 {
     IStringStream is(inputTypes);
-    setTypes(is);
+    setTypes(is, raw);
 }
 
 
-void Foam::ParticleBinaryBlob::setNames(const UList<word>& inputNames)
+void Foam::ParticleBinaryBlob::setNames
+(
+    const UList<word>& inputNames
+)
 {
     names_.clear();
 
@@ -122,7 +149,10 @@ void Foam::ParticleBinaryBlob::setNames(const UList<word>& inputNames)
 }
 
 
-void Foam::ParticleBinaryBlob::setNames(Istream& is)
+void Foam::ParticleBinaryBlob::setNames
+(
+    Istream& is
+)
 {
     names_.clear();
 
@@ -227,11 +257,14 @@ void Foam::ParticleBinaryBlob::setNames(Istream& is)
         }
     }
 
-    Info<<"read in " << size() << " types and " << nNames << " names" << endl;
+    // Info<<"read in " << size() << " types and " << nNames << " names" << endl;
 }
 
 
-void Foam::ParticleBinaryBlob::setNames(const string& inputNames)
+void Foam::ParticleBinaryBlob::setNames
+(
+    const string& inputNames
+)
 {
     IStringStream is(inputNames);
     setNames(is);
@@ -257,9 +290,6 @@ void Foam::ParticleBinaryBlob::makeSummary()
 }
 
 
-// * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
-
-
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 Foam::ParticleBinaryBlob::ParticleBinaryBlob()
@@ -268,6 +298,7 @@ Foam::ParticleBinaryBlob::ParticleBinaryBlob()
     types_(),
     names_()
 {}
+
 
 
 Foam::ParticleBinaryBlob::ParticleBinaryBlob
@@ -282,53 +313,31 @@ Foam::ParticleBinaryBlob::ParticleBinaryBlob
     types_(),
     names_()
 {
-    setTypes(inputTypes);
-    setNames(inputNames);
+    const label size = inputTypes.size();
 
-    if (notNull(offsetList) && notNull(bytesList))
+    if
+    (
+        size != inputNames.size()
+     || size != offsetList.size()
+     || size != bytesList.size()
+    )
     {
-        // adjust/verify correctness
+        FatalErrorInFunction
+            << "Mismatch in particle-binary-blob sizes (types:"
+            << size
+            << " names:" << inputTypes.size()
+            << " offsets:" << offsetList.size()
+            << " bytes:" << bytesList.size() << ")"
+            << exit(FatalError);
+    }
 
-        if (offsetList.size() != size())
-        {
-            FatalErrorInFunction
-                << "Mismatch in number of offsets ("
-                << offsetList.size()
-                << ") and number of particle-binary-blob fragments ("
-                << size() << ")"
-                << exit(FatalError);
-        }
+    forAll(inputTypes, elemI)
+    {
+        Fragment frag(inputTypes[elemI], offsetList[elemI]);
+        frag.name_  = inputNames[elemI];
+        frag.width_ = bytesList[elemI];
 
-        if (bytesList.size() != size())
-        {
-            FatalErrorInFunction
-                << "Mismatch in number of bytes ("
-                << bytesList.size()
-                << ") and number of particle-binary-blob fragments ("
-                << size() << ")"
-                << exit(FatalError);
-        }
-
-
-        label elemI = 0;
-        forAllConstIter(Container, *this, iter)
-        {
-            const Fragment& frag = iter();
-
-            if
-            (
-                int(frag.offset()) != offsetList[elemI]
-             && int(frag.width())  != bytesList[elemI]
-            )
-            {
-                FatalErrorInFunction
-                    << "Mismatch in offset/bytes for a particle-binary-blob ("
-                    << frag
-                    << exit(FatalError);
-            }
-
-            ++elemI;
-        }
+        append(frag);
     }
 
     makeSummary();
@@ -337,15 +346,34 @@ Foam::ParticleBinaryBlob::ParticleBinaryBlob
 
 Foam::ParticleBinaryBlob::ParticleBinaryBlob
 (
-    const string& inputTypes,
-    const string& inputNames
+    const UList<word>& inputTypes,
+    const UList<word>& inputNames,
+    const bool raw
 )
 :
     Container(),
     types_(),
     names_()
 {
-    setTypes(inputTypes);
+    setTypes(inputTypes, raw);
+    setNames(inputNames);
+
+    makeSummary();
+}
+
+
+Foam::ParticleBinaryBlob::ParticleBinaryBlob
+(
+    const string& inputTypes,
+    const string& inputNames,
+    const bool raw
+)
+:
+    Container(),
+    types_(),
+    names_()
+{
+    setTypes(inputTypes, raw);
     setNames(inputNames);
 
     makeSummary();
@@ -380,14 +408,14 @@ Foam::List<int> Foam::ParticleBinaryBlob::offsets() const
 }
 
 
-Foam::List<int> Foam::ParticleBinaryBlob::byteSizes() const
+Foam::List<int> Foam::ParticleBinaryBlob::sizes() const
 {
     List<int> lst(size());
 
     label i=0;
     forAllConstIter(Container, *this, iter)
     {
-        lst[i++] = iter().width() * iter().count();
+        lst[i++] = iter().sizeOf();
     }
 
     return lst;

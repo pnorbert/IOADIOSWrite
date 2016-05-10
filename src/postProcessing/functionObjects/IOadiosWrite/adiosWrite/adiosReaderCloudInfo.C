@@ -83,7 +83,6 @@ bool Foam::adiosReader::cloudInfo::read
     (
         reader.getStringListAttribute<word>(varName/"types"),
         reader.getStringListAttribute<word>(varName/"names"),
-        false, // raw = uncooked
         reader.getIntListAttribute(varName/"offset"),
         reader.getIntListAttribute(varName/"byte-size")
     );

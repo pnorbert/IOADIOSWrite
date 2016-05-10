@@ -234,13 +234,91 @@ bool Foam::adiosWrite::readCloud
         Info<<"read cloud " << obj->name() << " (type " << cloudType
             << ") from file\n";
 
-        Cloud<basicKinematicCollidingParcel>& cloudObj =
-            static_cast< Cloud<basicKinematicCollidingParcel> &>(*obj);
+#if 0
+        // this is just to check the round-trip information
+        // retrieve particle fragments
+        if (src.nParticle())
+        {
+            const size_t incr = src.width();
+            const ParticleBinaryBlob& binfo = src.blob();
+
+            size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+            char* rawdata = reinterpret_cast<char*>(iobuffer_.data());
+
+            for (int pI=0; pI < src.nParticle(); ++pI)
+            {
+                const char *blobBuffer = (rawdata + pI*incr);
+
+                forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
+                {
+                    const ParticleBinaryBlob::Fragment& frag = *iter;
+
+                    if (frag.type() == pTraits<label>::typeName)
+                    {
+                        Info<< frag.name() << " (" << frag.type() << ") = "
+                            << frag.getLabel(blobBuffer)  << nl;
+                    }
+                    else if (frag.type() == pTraits<scalar>::typeName)
+                    {
+                        Info<< frag.name() << " (" << frag.type() << ") = "
+                            << frag.getScalar(blobBuffer)  << nl;
+                    }
+                    else if (frag.type() == pTraits<vector>::typeName)
+                    {
+                        Info<< frag.name() << " (" << frag.type() << ") = "
+                            << frag.getVector(blobBuffer)  << nl;
+                    }
+                }
+            }
+
+            // not really serious about doing this, but for diagnostics
+
+            OStringStream os(IOstream::ASCII);
+
+            os << src.nParticle() << '(';
+
+            for (int pI=0; pI < src.nParticle(); ++pI)
+            {
+                const char *blobBuffer = (rawdata + pI*incr);
+
+                forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
+                {
+                    const ParticleBinaryBlob::Fragment& frag = *iter;
+
+                    if (frag.type() == pTraits<label>::typeName)
+                    {
+                        os << ' ' << frag.getLabel(blobBuffer);
+                    }
+                    else if (frag.type() == pTraits<scalar>::typeName)
+                    {
+                        os << ' ' << frag.getScalar(blobBuffer);
+                    }
+                    else if (frag.type() == pTraits<vector>::typeName)
+                    {
+                        os << ' ' << frag.getVector(blobBuffer);
+                    }
+                }
+            }
+
+            os << ')';
+
+        }
+#endif
+
+        if (true)
+        {
+            Info<<"skipping .. currently not working properly\n";
+            return false;
+        }
+
+        // TODO: other cloud types
+        typedef basicKinematicCloud::particleType pType;
+        basicKinematicCloud& cloudObj = static_cast<basicKinematicCloud&>(*obj);
 
         Pout<<"Current cloud: " << cloudObj.size() << " parcels. Cloud on file: "
             << src.nParticle() << " elements" << endl;
 
-        typedef Cloud<basicKinematicCollidingParcel>::particleType pType;
+        IDLList<pType> newParticles;
 
         if (cloudObj.size() > src.nParticle())
         {
@@ -257,16 +335,131 @@ bool Foam::adiosWrite::readCloud
                 << src.nParticle() << endl;
         }
 
-        size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+        if (src.nParticle())
+        {
+            const size_t incr = src.width();
+            size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
 
-        IBufStream is(iobuffer_, nread, IOstream::BINARY);
-#if 0
+#if 1
+            const ParticleBinaryBlob& binfo = src.blob();
+            char* rawdata = reinterpret_cast<char*>(iobuffer_.data());
+
+            // not really serious about doing this, but perhaps usable for debugging
+
+            OStringStream os(IOstream::ASCII);
+            os << src.nParticle() << '(';
+
+            for (int pI=0; pI < src.nParticle(); ++pI)
+            {
+                const char *blobBuffer = (rawdata + pI*incr);
+
+                forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
+                {
+                    const ParticleBinaryBlob::Fragment& frag = *iter;
+
+                    if (frag.type() == pTraits<label>::typeName)
+                    {
+                        os << ' ' << frag.getLabel(blobBuffer);
+                    }
+                    else if (frag.type() == pTraits<scalar>::typeName)
+                    {
+                        os << ' ' << frag.getScalar(blobBuffer);
+                    }
+                    else if (frag.type() == pTraits<vector>::typeName)
+                    {
+                        os << ' ' << frag.getVector(blobBuffer);
+                    }
+                    else
+                    {
+                        // Fatal: frag.type()
+                    }
+                }
+            }
+            os << ')';
+
+            IStringStream is(os.str(), IOstream::ASCII);
+
+            newParticles = IDLList<pType>
+            (
+                is,
+                pType::iNew(mesh)
+            );
+
+#else
+
+            // one particle
+            label num = 1;
+
+            char databuf[num*(incr + 4) + 4];
+
+            char *src = reinterpret_cast<char*>(iobuffer_.data());
+            char *dst = databuf;
+            size_t nbytes = 0;
+
+            dst[nbytes++] = '(';
+            for (int pI=0; pI < num; ++pI)
+            {
+                dst[nbytes++] = '(';
+
+                for (size_t i=0; i < incr; ++i)
+                {
+                    dst[nbytes++] = *(src++);
+                }
+
+                dst[nbytes++] = ')';
+            }
+            dst[nbytes++] = ')';
+
+
+            string input(databuf, nbytes);
+            Pout<< "input (" << nbytes << ") " << input << endl;
+
+            // testing - basic transcription:
+            IBufStream is(databuf, nbytes, IOstream::BINARY);
+            newParticles = IDLList<pType>
+            (
+                is,
+                pType::iNew(mesh)
+            );
+#endif
+///            {
+///                nbytes += src.sizeOf();
+///            }
+
+///            label ndigits = 1 + floor(Foam::log10(scalar(src.nParticle())));
+///            // include surrounding '()'
+///            size_t nbytes = src.sizeOf() + ndigits + 2;
+///
+///            const size_t sizeT = sizeof(DynamicCharList::value_type);
+///            const size_t target = (nbytes / sizeT) + (nbytes % sizeT);
+///
+///            iobuffer_.setSize(target);
+///            char *data = reinterpret_cast<char*>(iobuffer_.data());
+///
+///            OBufStream os(data, nbytes, IOstream::ASCII);
+///
+///            os << src.nParticle() << '(';
+///            nbytes = os.size();
+///
+///            if (reader.getVariable(src.fullName(), (data+nbytes)))
+///            {
+///                nbytes += src.sizeOf();
+///            }
+///            data[nbytes] = ')';
+///
+///            string input(data, nbytes);
+///            Pout<< "Got input (" << nbytes << ") " << input << endl;
+///
+///            IBufStream is(data, nbytes, IOstream::BINARY);
+///            newParticles = IDLList<pType>
+///            (
+///                is,
+///                pType::iNew(mesh)
+///            );
+        }
+
+#if 1
         cloudObj.clear();
-        IDLList<pType> newParticles
-        (
-            is,
-            pType::iNew(mesh)
-        );
 
         forAllIter(Cloud<pType>, newParticles, newpIter)
         {

@@ -103,19 +103,61 @@ class ParticleBinaryBlobFragment
 public:
 
     //- Construct for specified type and offset
-    ParticleBinaryBlobFragment(const word& type, size_t offset);
+    ParticleBinaryBlobFragment
+    (
+        const word& type,
+        size_t offset
+    );
 
 
+    //- The name associated with this byte sequence
     inline const word& name() const
     {
         return name_;
     }
 
 
+    //- The primitive type for this byte sequence
     inline const word& type() const
     {
         return type_;
     }
+
+
+    //- The beginning of this byte sequence
+    inline size_t offset() const
+    {
+        return offset_;
+    }
+
+
+    //- The size of an individual element
+    inline size_t width() const
+    {
+        return width_;
+    }
+
+
+    //- The number of individual elements
+    inline size_t count() const
+    {
+        return count_;
+    }
+
+
+    //- Total number of bytes
+    inline size_t sizeOf() const
+    {
+        return width_ * count_;
+    }
+
+
+    //- The end of this byte sequence
+    inline size_t end() const
+    {
+        return offset_ + sizeOf();
+    }
+
 
 
     // TODO
@@ -154,36 +196,6 @@ public:
     inline vector getVector(const UList<char>& buffer) const
     {
         return getVector(buffer.cdata());
-    }
-
-
-    inline size_t offset() const
-    {
-        return offset_;
-    }
-
-
-    inline size_t width() const
-    {
-        return width_;
-    }
-
-
-    inline size_t count() const
-    {
-        return count_;
-    }
-
-
-    inline size_t totalWidth() const
-    {
-        return width_ * count_;
-    }
-
-
-    inline size_t end() const
-    {
-        return offset_ + width_ * count_;
     }
 
 

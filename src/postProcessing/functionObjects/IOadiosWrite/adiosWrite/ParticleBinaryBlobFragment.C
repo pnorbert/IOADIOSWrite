@@ -25,8 +25,6 @@ License
 
 #include "ParticleBinaryBlobFragment.H"
 
-#include "vector.H"
-
 // * * * * * * * * * * * * * Static Member Functions * * * * * * * * * * * * //
 
 size_t Foam::ParticleBinaryBlobFragment::width(const word& typeTok)
@@ -89,15 +87,11 @@ Foam::ParticleBinaryBlobFragment::ParticleBinaryBlobFragment
 
     width_ = width(type_);
 
-    // Pair<..>
     if (width_ > 0)
     {
         count_ = 1;
     }
 }
-
-
-// * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * * //
 
 
 // * * * * * * * * * * * * * * * IOstream Operators  * * * * * * * * * * * * //
@@ -119,7 +113,7 @@ Foam::Ostream& Foam::operator<<
 
     os.check
     (
-        "Ostream& operator<<(Ostream&, const ParticleBinaryBlob::Fragment&)"
+        "Ostream& operator<<(Ostream&, const ParticleBinaryBlobFragment&)"
     );
 
     return os;

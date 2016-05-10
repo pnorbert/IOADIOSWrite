@@ -51,11 +51,9 @@ class ParticleBinaryBlob
 :
     private SLList<ParticleBinaryBlobFragment>
 {
-
-    typedef SLList<ParticleBinaryBlobFragment> Container;
-
 public:
 
+    typedef SLList<ParticleBinaryBlobFragment> Container;
     typedef ParticleBinaryBlobFragment Fragment;
 
 private:
@@ -72,13 +70,25 @@ private:
         void clear();
 
         //- Set fragment types and sizes, add names later
-        void setTypes(const UList<word>& inputTypes);
+        void setTypes
+        (
+            const UList<word>& inputTypes,
+            const bool raw
+        );
 
         //- Set fragment types and sizes, add names later
-        void setTypes(Istream& is);
+        void setTypes
+        (
+            Istream& is,
+            const bool raw
+        );
 
         //- Set fragment types and sizes, add names later
-        void setTypes(const string& inputTypes);
+        void setTypes
+        (
+            const string& inputTypes,
+            const bool raw
+        );
 
         //- Set the names for each fragment
         void setNames(const UList<word>& inputNames);
@@ -99,22 +109,33 @@ public:
         //- Construct null
         ParticleBinaryBlob();
 
-        //- Construct from type names and variable names
-        //  Optionally verify the offsets and widths
+        //- Construct from base components (types, names, offsets, widths)
         ParticleBinaryBlob
         (
             const UList<word>& inputTypes,
             const UList<word>& inputNames,
-            const UList<int>& offsetList = UList<int>::null(),
-            const UList<int>& bytesList  = UList<int>::null()
+            const UList<int>& offsetList,
+            const UList<int>& bytesList
         );
 
+        //- Construct from type names and variable names.
+        //  Optionally specify that the expected content is 'raw'
+        //  (ie, without any surrounding brackets)
+        ParticleBinaryBlob
+        (
+            const UList<word>& inputTypes,
+            const UList<word>& inputNames,
+            const bool raw = false
+        );
 
-        //- Construct from type names and variable names
+        //- Construct from type names and variable names.
+        //  Optionally specify that the expected content is 'raw'
+        //  (ie, without any surrounding brackets)
         ParticleBinaryBlob
         (
             const string& inputTypes,
-            const string& inputNames
+            const string& inputNames,
+            const bool raw = false
         );
 
 
@@ -128,20 +149,25 @@ public:
             {
                 return 0;
             }
-            else
-            {
-                return last().end();
-            }
+
+            // The overall size must include a closing ')' character.
+            // If the first fragment has a non-zero offset it has an
+            // opening '(' character
+            return last().end() + (first().offset() ? 1 : 0);
         }
 
 
+        //- A summary of the fragment types
         const wordList& types() const;
 
+        //- A summary of the fragment names
         const wordList& names() const;
 
+        //- A summary of the fragment offsets
         List<int> offsets() const;
 
-        List<int> byteSizes() const;
+        //- A summary of the fragment widths
+        List<int> sizes() const;
 
 
         using Container::size;
