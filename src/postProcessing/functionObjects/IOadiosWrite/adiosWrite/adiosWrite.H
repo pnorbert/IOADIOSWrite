@@ -50,8 +50,6 @@ Author
 #include "runTimeSelectionTables.H"
 #include "interpolation.H"
 #include "fvMesh.H"
-#include "surfaceMesh.H"
-#include "fvsPatchFields.H"
 
 #include "adios.h"
 #include "adios_read.h"
@@ -80,282 +78,18 @@ class adiosWrite
 :
     public adiosCore
 {
-private:
+    // Forward declarations of various sub-components
+        class regionInfo;
+        class cloudInfo;
 
-    //- Is field-type supported?
-    static bool supportedFieldType(const word& fieldType);
 
+    // Private data
 
-protected:
-
-    // Protected classes
-
-        // Per-region info variables grouped together to be able to create a list of them
-        class cloudInfo
-        {
-            //- Name of the cloud
-            word name_;
-
-            //- Total number of particles (sum of nParticle_ list)
-            label nTotal_;
-
-            //- Array containing number of particles per process (often used list)
-            List<label> nParticle_;
-
-        public:
-
-            //- Construct null
-            cloudInfo(const word& name)
-            :
-               name_(name),
-               nTotal_(0),
-               nParticle_(Pstream::nProcs())
-            {
-                reset();
-            }
-
-            ~cloudInfo() {}
-
-
-            //- Name of the cloud
-            const word& name() const
-            {
-                return name_;
-            }
-
-
-            //- Total number of particles across all processes
-            label nTotal() const
-            {
-                return nTotal_;
-            }
-
-
-            //- The number of particles on this process
-            label nParticle() const
-            {
-                return nParticle_[Pstream::myProcNo()];
-            }
-
-
-            //- Set the number of particles and sync across processes
-            //  Return the overall total
-            label nParticle(label n)
-            {
-                // The number of particles on each process
-                nParticle_[Pstream::myProcNo()] = n;
-                Pstream::gatherList(nParticle_);
-                Pstream::scatterList(nParticle_);
-
-                // Sum total number of particles on all processes
-                nTotal_ = sum(nParticle_);
-
-                return nTotal_;
-            }
-
-
-            //- Local process offset within a global array of parcels
-            label offset() const
-            {
-                label off = 0;
-                for (label prev=0; prev < Pstream::myProcNo(); ++prev)
-                {
-                    off += nParticle_[prev];
-                }
-
-                return off;
-            }
-
-
-            //- Reset to zeros
-            void reset()
-            {
-                nTotal_ = 0;
-                forAll(nParticle_, i)
-                {
-                    nParticle_[i] = 0;
-                }
-            }
-
-        };
-
-
-        // Per-region info variables grouped together to be able to create a list of them
-        class regionInfo
-        {
-            //- Name of the region
-            word name_;
-
-            //- Normally don't want an explicit-write (want auto-write)
-            Switch explicitWrite_;
-
-            //- Names of volume fields to write
-            wordReList requestedFields_;
-
-            //- Names of volume fields to ignore
-            wordReList ignoredFields_;
-
-            // on-the-fly information
-            mutable enum polyMesh::readUpdateState topoState_;
-
-
-            //- Read info for one region from its own dictionary
-            void read(const fvMesh& mesh, const dictionary& dict);
-
-            //- reset all information
-            void resetAll();
-
-
-        public:
-
-            //- Names of clouds to write
-            wordReList requestedClouds_;
-
-            //- Names of clouds to ignored
-            wordReList ignoredClouds_;
-
-            //- Additional attributes to write for particle data
-            wordReList requestedAttrs_;
-
-            //- Fields to be written. Field name as key, class as value
-            HashTable<word> fieldsToWrite_;
-
-            //- Clouds to be processed
-            SLList<cloudInfo> cloudInfo_;
-
-            //- Construct null
-            regionInfo()
-            :
-                name_(),
-                explicitWrite_(false)
-            {};
-
-            //- Construct from dictionary information
-            regionInfo
-            (
-                const fvMesh& mesh,
-                const dictionary& dict
-            );
-
-            ~regionInfo() {};
-
-
-            //- If auto-write is in effect
-            const word& name() const
-            {
-                return name_;
-            }
-
-
-            //- If auto-write is in effect
-            bool autoWrite() const
-            {
-                return !explicitWrite_;
-            }
-
-
-            //- Set topology changing
-            void meshChanging(bool force, const fvMesh& mesh) const
-            {
-                if (force)
-                {
-                    topoState_ = polyMesh::TOPO_CHANGE;
-                }
-                else if (mesh.topoChanging())
-                {
-                    topoState_ = polyMesh::TOPO_CHANGE;
-                }
-                else if (mesh.moving())
-                {
-                    topoState_ = polyMesh::POINTS_MOVED;
-                }
-                else
-                {
-                    topoState_ = polyMesh::UNCHANGED;
-                }
-            }
-
-
-            //- Is mesh moving
-            bool moving() const
-            {
-                return topoState_ == polyMesh::POINTS_MOVED;
-            }
-
-
-            //- Is mesh topology changing
-            bool topoChanging() const
-            {
-                return
-                (
-                    topoState_ == polyMesh::TOPO_CHANGE
-                 || topoState_ == polyMesh::TOPO_PATCH_CHANGE
-                );
-            }
-
-
-            //- Is mesh changing (topology changing and/or moving)
-            bool changing() const
-            {
-                return moving() || topoChanging();
-            }
-
-
-            //- Classify fields into the appropriate groups,
-            //  returns the number of fields
-            label classifyFields
-            (
-                const fvMesh& mesh,
-                bool verbose = false
-            );
-
-
-            //- Path name for regions
-            inline string regionPath() const
-            {
-                return adiosCore::regionPath(name_);
-            }
-
-            //- Path name for fields
-            inline fileName fieldPath(const string& var) const
-            {
-                return adiosCore::fieldPath(name_, var);
-            }
-
-
-            //- Path name for named cloud
-            inline fileName cloudPath(const string& cloudName) const
-            {
-                return adiosCore::cloudPath(name_, cloudName);
-            }
-
-
-            //- Path name for named cloud
-            inline fileName cloudPath(const cloudInfo& cinfo) const
-            {
-                return cloudPath(cinfo.name());
-            }
-
-
-            //- Simple text representation for output purposes
-            inline word info() const
-            {
-                return name_;
-            }
-
-        };
-
-
-    // Protected data
-
-        // Reference to the object registry
+        // Reference to the object registry (fvMesh)
         const objectRegistry& obr_;
 
-        //- Reference to the primary mesh database
-        const fvMesh& primaryMesh_; //  primaryMesh_(refCast<const fvMesh>(obr))
-
         //- Reference to the time database
-        const Time& time_;  // = primaryMesh_.time()
+        const Time& time_;
 
         //- track time index from restart (avoid write immediately after restart)
         int restartIndex_;
@@ -387,7 +121,6 @@ protected:
         int64_t  groupID_;    // group of output variables
         uint64_t outputSize_; // number of bytes we write in one timestep by the process
 
-
         // MPI parallel code variables
         MPI_Comm comm_; // Pstream:: does not provide communicator
 
@@ -399,6 +132,15 @@ protected:
         DynamicCharList iobuffer_;
 
 protected:
+
+    // Static Member Functions
+
+        //- Is field-type supported?
+        static bool supportedFieldType(const word& fieldType);
+
+        //- Return name of cloud-type (or surrogate) or empty word
+        static word supportedCloudType(const word& cloudType);
+
 
     // Protected Member Functions
 
@@ -753,8 +495,30 @@ protected:
             //- Define ADIOS cloud variables/attributes
             size_t cloudDefine(regionInfo&);
 
+
+            //- Cloud define for a given type
+            //  Return the maximum associated stream length
+            template<class CloudType>
+            size_t cloudDefine
+            (
+                const CloudType& cloud,
+                cloudInfo& cInfo,
+                const fileName& varPath
+            );
+
+
             //- Write ADIOS cloud variables
             void cloudWrite(const regionInfo&);
+
+            //- Write ADIOS cloud variable for a given type
+            template<class CloudType>
+            void cloudWrite
+            (
+                const CloudType& cloud,
+                const cloudInfo& cInfo,
+                const regionInfo& rInfo
+            );
+
 
         // Functions for handling mesh
 
@@ -851,6 +615,313 @@ public:
 };
 
 
+//- Per-region info variables grouped together to be able to create a list of them
+class adiosWrite::cloudInfo
+{
+    //- Name of the cloud
+    word name_;
+
+    //- Type of the cloud
+    word type_;
+
+    //- Alternative dispatch type
+    word dispatch_;
+
+    //- Total number of particles (sum of nParticle_ list)
+    label nTotal_;
+
+    //- Array containing number of particles per process (often used list)
+    List<label> nParticle_;
+
+public:
+
+    //- Construct with name and type
+    cloudInfo(const word& name, const word& type)
+    :
+        name_(name),
+        type_(type),
+        dispatch_(),
+        nTotal_(0),
+        nParticle_(Pstream::nProcs())
+    {
+        reset();
+    }
+
+
+    cloudInfo(const word& name, const word& type, const word& useType)
+    :
+        name_(name),
+        type_(type),
+        dispatch_(),
+        nTotal_(0),
+        nParticle_(Pstream::nProcs())
+    {
+        reset();
+
+        if (type != useType)
+        {
+            dispatch_ = useType;
+        }
+    }
+
+
+    ~cloudInfo() {}
+
+
+    //- Name of the cloud
+    const word& name() const
+    {
+        return name_;
+    }
+
+
+    //- Type of the cloud
+    const word& type() const
+    {
+        return type_;
+    }
+
+
+    //- Dispatch type for the cloud
+    const word& dispatch() const
+    {
+        return dispatch_.empty() ? type_ : dispatch_;
+    }
+
+
+    //- Uses indirect support
+    bool needsDispatch() const
+    {
+        return !dispatch_.empty();
+    }
+
+
+    //- Total number of particles across all processes
+    label nTotal() const
+    {
+        return nTotal_;
+    }
+
+
+    //- The number of particles on this process
+    label nParticle() const
+    {
+        return nParticle_[Pstream::myProcNo()];
+    }
+
+
+    //- Set the number of particles and sync across processes
+    //  Return the overall total
+    label nParticle(label n)
+    {
+        // The number of particles on each process
+        nParticle_[Pstream::myProcNo()] = n;
+        Pstream::gatherList(nParticle_);
+        Pstream::scatterList(nParticle_);
+
+        // Sum total number of particles on all processes
+        nTotal_ = sum(nParticle_);
+
+        return nTotal_;
+    }
+
+
+    //- Local process offset within a global array of parcels
+    label offset() const
+    {
+        label off = 0;
+        for (label prev=0; prev < Pstream::myProcNo(); ++prev)
+        {
+            off += nParticle_[prev];
+        }
+
+        return off;
+    }
+
+
+    //- Reset to zeros
+    void reset()
+    {
+        nTotal_ = 0;
+        forAll(nParticle_, i)
+        {
+            nParticle_[i] = 0;
+        }
+    }
+
+};
+
+
+//- Per-region info variables grouped together to be able to create a list of them
+class adiosWrite::regionInfo
+{
+    //- Name of the region
+    word name_;
+
+    //- Normally don't want an explicit-write (want auto-write)
+    Switch explicitWrite_;
+
+    //- Names of volume fields to write
+    wordReList requestedFields_;
+
+    //- Names of volume fields to ignore
+    wordReList ignoredFields_;
+
+    // on-the-fly information
+    mutable enum polyMesh::readUpdateState topoState_;
+
+
+    //- Read info for one region from its own dictionary
+    void read(const fvMesh& mesh, const dictionary& dict);
+
+    //- reset all information
+    void resetAll();
+
+
+public:
+
+    //- Names of clouds to write
+    wordReList requestedClouds_;
+
+    //- Names of clouds to ignored
+    wordReList ignoredClouds_;
+
+    //- Additional attributes to write for particle data
+    wordReList requestedAttrs_;
+
+    //- Fields to be written. Field name as key, class as value
+    HashTable<word> fieldsToWrite_;
+
+    //- Clouds to be processed
+    SLList<cloudInfo> cloudInfo_;
+
+
+    //- Construct null
+    regionInfo()
+    :
+        name_(),
+        explicitWrite_(false)
+    {};
+
+
+    //- Construct from dictionary information
+    regionInfo
+    (
+        const fvMesh& mesh,
+        const dictionary& dict
+    );
+
+
+    ~regionInfo() {};
+
+
+    //- If auto-write is in effect
+    const word& name() const
+    {
+        return name_;
+    }
+
+
+    //- If auto-write is in effect
+    bool autoWrite() const
+    {
+        return !explicitWrite_;
+    }
+
+
+    //- Set topology changing
+    void meshChanging(bool force, const fvMesh& mesh) const
+    {
+        if (force)
+        {
+            topoState_ = polyMesh::TOPO_CHANGE;
+        }
+        else if (mesh.topoChanging())
+        {
+            topoState_ = polyMesh::TOPO_CHANGE;
+        }
+        else if (mesh.moving())
+        {
+            topoState_ = polyMesh::POINTS_MOVED;
+        }
+        else
+        {
+            topoState_ = polyMesh::UNCHANGED;
+        }
+    }
+
+
+    //- Is mesh moving
+    bool moving() const
+    {
+        return topoState_ == polyMesh::POINTS_MOVED;
+    }
+
+
+    //- Is mesh topology changing
+    bool topoChanging() const
+    {
+        return
+        (
+            topoState_ == polyMesh::TOPO_CHANGE
+         || topoState_ == polyMesh::TOPO_PATCH_CHANGE
+        );
+    }
+
+
+    //- Is mesh changing (topology changing and/or moving)
+    bool changing() const
+    {
+        return moving() || topoChanging();
+    }
+
+
+    //- Classify fields into the appropriate groups,
+    //  returns the number of fields
+    label classifyFields
+    (
+        const fvMesh& mesh,
+        bool verbose = false
+    );
+
+
+    //- Path name for regions
+    inline string regionPath() const
+    {
+        return adiosCore::regionPath(name_);
+    }
+
+    //- Path name for fields
+    inline fileName fieldPath(const string& var) const
+    {
+        return adiosCore::fieldPath(name_, var);
+    }
+
+
+    //- Path name for named cloud
+    inline fileName cloudPath(const string& cloudName) const
+    {
+        return adiosCore::cloudPath(name_, cloudName);
+    }
+
+
+    //- Path name for named cloud
+    inline fileName cloudPath(const cloudInfo& cinfo) const
+    {
+        return cloudPath(cinfo.name());
+    }
+
+
+    //- Simple text representation for output purposes
+    inline word info() const
+    {
+        return name_;
+    }
+
+};
+
+
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 } // End namespace Foam
@@ -858,6 +929,7 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #ifdef NoRepository
+    #include "adiosCloudTemplates.C"
     #include "adiosFieldTemplates.C"
 #endif
 

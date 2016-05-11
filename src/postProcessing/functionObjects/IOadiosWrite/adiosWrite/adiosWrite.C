@@ -316,12 +316,12 @@ Foam::adiosWrite::adiosWrite
 :
     adiosCore(groupName),
     obr_(obr),
-    primaryMesh_(refCast<const fvMesh>(obr)),
-    time_(primaryMesh_.time()),
+    time_(refCast<const fvMesh>(obr).time()),
     restartIndex_(-1)
 {
     Info<< "adiosWrite constructor called (" << Pstream::nProcs()
-        << " procs) with primary mesh " << primaryMesh_.name() << endl;
+        << " procs) with primary mesh "
+        << refCast<const fvMesh>(obr).name() << endl;
 
     if (Pstream::nProcs() == 1)
     {

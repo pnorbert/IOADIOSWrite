@@ -49,6 +49,8 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
         return adiosTime();
     }
 
+    adiosTime timeInfo(reader);
+
     iobuffer_.reserve(reader.sizeOf());
 
     // direct lookup via time_.lookupClass<fvMesh>() would be nice,
@@ -105,8 +107,6 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
             }
          }
     }
-
-    adiosTime timeInfo(reader);
 
     reader.close();
 
