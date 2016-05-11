@@ -12,7 +12,7 @@
 
 ---
 
-2016-05-10
+2016-05-11
 
 ---
 
@@ -49,10 +49,11 @@ All entries are considered mandatory.
 | string  | /openfoam/platform          | "linux64Gcc"
 | int     | /openfoam/label-size        | 32
 | string  | /openfoam/precision         | "double"
-| int     | /openfoam/updateMesh        | 1 (bool, but may change in the future to include indexing etc)
 | int     | /openfoam/nProcs            | 4
 | int     | /openfoam/nRegions          | 2
 | string[]| /openfoam/regions           | {"region0", "solid"}
+| string[]| /openfoam/moving            | {"solid"}
+| string[]| /openfoam/topo-change       | {"region0"}
 
 
 ### General Variables

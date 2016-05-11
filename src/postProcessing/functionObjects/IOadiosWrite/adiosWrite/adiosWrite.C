@@ -165,10 +165,9 @@ void Foam::adiosWrite::regionInfo::resetAll()
 }
 
 
-size_t Foam::adiosWrite::defineVars(bool updateMesh)
+size_t Foam::adiosWrite::defineVars()
 {
-    Info<< "adiosWrite::defineVars(" << (updateMesh ? "updateMesh" : "")
-        << ") called at time "
+    Info<< "adiosWrite::defineVars() called at time "
         << obr_.time().timeName() << " time index "
         << obr_.time().timeIndex() << endl;
 
@@ -213,37 +212,39 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         adiosTraits<scalar>::precisionName
     );
 
-    // mesh updated - may also want moved points etc.
-//  enum readUpdateState
-//  {
-//     UNCHANGED,
-//     POINTS_MOVED,
-//     TOPO_CHANGE,
-//     TOPO_PATCH_CHANGE
-//  };
-
-    // store as integer instead of bool: minimal overhead, more flexibility
-    defineIntAttribute
-    (
-        "updateMesh",
-        adiosCore::foamAttribute,
-        updateMesh
-    );
-
     // other general information
     defineIntAttribute("nProcs",    adiosCore::foamAttribute, Pstream::nProcs());
     defineIntAttribute("nRegions",  adiosCore::foamAttribute, regions_.size());
 
     // region-names attribute (list of strings)
+
+    // mesh updated - may also want moved points etc.
+    // this is still not the greatest:
     {
-        stringList names(regions_.size());
-        int regI=0;
+        DynamicList<word> names(regions_.size());
+        DynamicList<word> topo(regions_.size());
+        DynamicList<word> moved(regions_.size());
+
         forAllConstIter(SLList<regionInfo>, regions_, iter)
         {
-            names[regI++] = iter().name_;
+            const regionInfo& rInfo = iter();
+            const word& regName = rInfo.name();
+
+            names.append(regName);
+
+            if (rInfo.topoChanging())
+            {
+                topo.append(rInfo.name());
+            }
+            else if (rInfo.moving())
+            {
+                moved.append(rInfo.name());
+            }
         }
 
-        defineListAttribute("regions", adiosCore::foamAttribute, names);
+        defineListAttribute("regions",     adiosCore::foamAttribute, names);
+        defineListAttribute("moving",      adiosCore::foamAttribute, moved);
+        defineListAttribute("topo-change", adiosCore::foamAttribute, topo);
     }
 
     // General information (as variable)
@@ -257,7 +258,7 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         regionInfo& rInfo = iter();
         const fileName varPath = rInfo.regionPath();
 
-        const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+        const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
         const polyPatchList& patches = mesh.boundaryMesh();
 
         stringList pNames(patches.size());
@@ -274,7 +275,7 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
         defineListAttribute("patch-names", varPath, pNames);
         defineListAttribute("patch-types", varPath, pTypes);
 
-        bufLen = meshDefine(mesh, updateMesh);
+        bufLen = meshDefine(rInfo);
         maxLen = Foam::max(maxLen, bufLen);
 
         bufLen = fieldDefine(rInfo);
@@ -370,10 +371,11 @@ Foam::adiosWrite::regionInfo::regionInfo
     name_(mesh.name()),
     explicitWrite_(false),
     requestedFields_(),
-    requestedClouds_(),
-    requestedAttrs_(),
     ignoredFields_(),
+    topoState_(polyMesh::UNCHANGED),
+    requestedClouds_(),
     ignoredClouds_(),
+    requestedAttrs_(),
     fieldsToWrite_(),
     cloudInfo_()
 {
@@ -647,19 +649,15 @@ void Foam::adiosWrite::write()
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
         // Re-write mesh if first time or any of the meshes changed
-        bool updateMesh = (timeSteps_ == 0);
-        if (!updateMesh)
+        forAllConstIter(SLList<regionInfo>, regions_, iter)
         {
-            HashTable<const fvMesh*> allMeshes = time_.lookupClass<fvMesh>();
+            const regionInfo& rInfo = iter();
 
-            forAllConstIter(HashTable<const fvMesh*>, allMeshes, iter)
-            {
-                updateMesh = (*iter)->changing();
-                if (updateMesh)
-                {
-                    break;
-                }
-            }
+            rInfo.meshChanging
+            (
+                (timeSteps_ == 0),
+                time_.lookupObject<fvMesh>(rInfo.name())
+            );
         }
 
 #if 0
@@ -688,12 +686,12 @@ void Foam::adiosWrite::write()
         // -> simply update everything for simplicity
         deleteDefinitions();
 
-        classifyFields(true);
+        classifyFields(true); // verbose
 
         // ADIOS requires to define all variables before writing anything
         Info<< "Define variables in ADIOS" << endl;
 
-        size_t maxLen = defineVars(updateMesh);
+        size_t maxLen = defineVars();
 
         // Pout<<"reserve write buffer " << maxLen << endl;
         iobuffer_.reserve(maxLen); // NEEDS attention if iobuffer is not char!
@@ -728,10 +726,8 @@ void Foam::adiosWrite::write()
         {
             regionInfo& rInfo = iter();
 
-            const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
-
             // Re-write mesh if dynamic or first time
-            meshWrite(mesh, updateMesh);
+            meshWrite(rInfo);
 
             // Write field data
             fieldWrite(rInfo);

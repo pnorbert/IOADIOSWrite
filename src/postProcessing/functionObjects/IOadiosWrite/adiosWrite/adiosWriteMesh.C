@@ -27,16 +27,14 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-size_t Foam::adiosWrite::meshDefine
-(
-    const fvMesh& mesh,
-    const bool updateMesh
-)
+size_t Foam::adiosWrite::meshDefine(const regionInfo& rInfo)
 {
-    if (!updateMesh)
+    if (!rInfo.changing())
     {
         return 0;
     }
+
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
 
     Info<< "adiosWrite::meshDefine: " << mesh.name() << " at time "
         << mesh.time().timeName() << endl;
@@ -49,12 +47,18 @@ size_t Foam::adiosWrite::meshDefine
 
     // summary information
     defineIntVariable(varPath/"nPoints");       // polyMesh/nPoints
-    defineIntVariable(varPath/"nCells");        // polyMesh/nCells
-    defineIntVariable(varPath/"nFaces");        // polyMesh/nFaces
-    defineIntVariable(varPath/"nInternalFaces"); // polyMesh/nInternalFaces
 
     // polyMesh/points: 2D array (N points x 3 coordinates)
     defineVectorVariable(varPath/"points",  mesh.nPoints());
+
+    if (!rInfo.topoChanging())
+    {
+        return maxLen;
+    }
+
+    defineIntVariable(varPath/"nCells");        // polyMesh/nCells
+    defineIntVariable(varPath/"nFaces");        // polyMesh/nFaces
+    defineIntVariable(varPath/"nInternalFaces"); // polyMesh/nInternalFaces
 
     // polyMesh/faces - save in compact form
     // need transcription for output
@@ -97,16 +101,14 @@ size_t Foam::adiosWrite::meshDefine
 }
 
 
-void Foam::adiosWrite::meshWrite
-(
-    const fvMesh& mesh,
-    const bool updateMesh
-)
+void Foam::adiosWrite::meshWrite(const regionInfo& rInfo)
 {
-    if (!updateMesh)
+    if (!rInfo.changing())
     {
         return;
     }
+
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
 
     Info<< "adiosWrite::meshWrite: " << mesh.name() << " at time "
         << mesh.time().timeName() << endl;
@@ -114,12 +116,18 @@ void Foam::adiosWrite::meshWrite
     const fileName varPath = adiosCore::meshPath(mesh.name());
 
     writeIntVariable(varPath/"nPoints", mesh.nPoints());
-    writeIntVariable(varPath/"nCells",  mesh.nCells());
-    writeIntVariable(varPath/"nFaces",  mesh.nFaces());
-    writeIntVariable(varPath/"nInternalFaces", mesh.nInternalFaces());
 
     // polyMesh/points: 2D array (N points x 3 coordinates)
     writeVariable(varPath/"points", mesh.points());
+
+    if (!rInfo.topoChanging())
+    {
+        return;
+    }
+
+    writeIntVariable(varPath/"nCells",  mesh.nCells());
+    writeIntVariable(varPath/"nFaces",  mesh.nFaces());
+    writeIntVariable(varPath/"nInternalFaces", mesh.nInternalFaces());
 
     // polyMesh/faces - save in compact form
     // for this we use two separate lists

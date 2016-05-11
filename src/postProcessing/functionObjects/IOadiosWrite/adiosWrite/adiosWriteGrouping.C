@@ -146,7 +146,6 @@ Foam::label Foam::adiosWrite::classifyFields(bool verbose)
         Info<< endl << "Foam::adiosWrite::classifyFields:" << endl;
     }
 
-
     label nFields = 0;
     forAllIter(SLList<regionInfo>, regions_, iter)
     {
@@ -154,7 +153,7 @@ Foam::label Foam::adiosWrite::classifyFields(bool verbose)
 
         nFields += r.classifyFields
         (
-            time_.lookupObject<fvMesh>(r.name_),
+            time_.lookupObject<fvMesh>(r.name()),
             verbose
         );
     }

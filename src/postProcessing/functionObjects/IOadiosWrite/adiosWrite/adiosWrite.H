@@ -183,14 +183,6 @@ protected:
         // Per-region info variables grouped together to be able to create a list of them
         class regionInfo
         {
-            //- Read info for one region from its own dictionary
-            void read(const fvMesh& mesh, const dictionary& dict);
-
-            //- reset all information
-            void resetAll();
-
-
-        public:
             //- Name of the region
             word name_;
 
@@ -200,19 +192,30 @@ protected:
             //- Names of volume fields to write
             wordReList requestedFields_;
 
-            //- Names of clouds to write
-            wordReList requestedClouds_;
-
-            //- Additional attributes to write for particle data
-            wordReList requestedAttrs_;
-
             //- Names of volume fields to ignore
             wordReList ignoredFields_;
+
+            // on-the-fly information
+            mutable enum polyMesh::readUpdateState topoState_;
+
+
+            //- Read info for one region from its own dictionary
+            void read(const fvMesh& mesh, const dictionary& dict);
+
+            //- reset all information
+            void resetAll();
+
+
+        public:
+
+            //- Names of clouds to write
+            wordReList requestedClouds_;
 
             //- Names of clouds to ignored
             wordReList ignoredClouds_;
 
-            // on-the-fly information
+            //- Additional attributes to write for particle data
+            wordReList requestedAttrs_;
 
             //- Fields to be written. Field name as key, class as value
             HashTable<word> fieldsToWrite_;
@@ -238,9 +241,63 @@ protected:
 
 
             //- If auto-write is in effect
+            const word& name() const
+            {
+                return name_;
+            }
+
+
+            //- If auto-write is in effect
             bool autoWrite() const
             {
                 return !explicitWrite_;
+            }
+
+
+            //- Set topology changing
+            void meshChanging(bool force, const fvMesh& mesh) const
+            {
+                if (force)
+                {
+                    topoState_ = polyMesh::TOPO_CHANGE;
+                }
+                else if (mesh.topoChanging())
+                {
+                    topoState_ = polyMesh::TOPO_CHANGE;
+                }
+                else if (mesh.moving())
+                {
+                    topoState_ = polyMesh::POINTS_MOVED;
+                }
+                else
+                {
+                    topoState_ = polyMesh::UNCHANGED;
+                }
+            }
+
+
+            //- Is mesh moving
+            bool moving() const
+            {
+                return topoState_ == polyMesh::POINTS_MOVED;
+            }
+
+
+            //- Is mesh topology changing
+            bool topoChanging() const
+            {
+                return
+                (
+                    topoState_ == polyMesh::TOPO_CHANGE
+                 || topoState_ == polyMesh::TOPO_PATCH_CHANGE
+                );
+            }
+
+
+            //- Is mesh changing (topology changing and/or moving)
+            bool changing() const
+            {
+                return moving() || topoChanging();
             }
 
 
@@ -702,18 +759,12 @@ protected:
         // Functions for handling mesh
 
             //- Define ADIOS mesh variables
-            size_t meshDefine
-            (
-                const fvMesh&,
-                const bool updateMesh
-            );
+            //  If the region has been updated
+            size_t meshDefine(const regionInfo&);
 
             //- Write ADIOS mesh variables
-            void meshWrite
-            (
-                const fvMesh&,
-                const bool updateMesh
-            );
+            //  If the region has been updated
+            void meshWrite(const regionInfo&);
 
 
         // Miscallenous definitions
@@ -731,8 +782,8 @@ protected:
             void operator=(const adiosWrite&);
 
             //- Define ADIOS variables (before writing them)
-            //  Optionally define mesh information too
-            size_t defineVars(const bool updateMesh);
+            //  Mesh information is defined if the region has been updated
+            size_t defineVars();
 
             void deleteDefinitions();
 

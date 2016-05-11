@@ -44,7 +44,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
     Info<< "  adiosWrite::cloudDefine: " << r.info() << endl;
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name());
 
     HashTable<const cloud*> allClouds = mesh.lookupClass<cloud>();
 
@@ -320,7 +320,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
 {
     typedef OCompactBufStream ParticleOutputStream;
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(r.name());
     Info<< "  adiosWrite::cloudWrite: " << r.info() << endl;
 
     DynamicList<label> labelBuffer;

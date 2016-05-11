@@ -58,7 +58,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
     size_t bufLen = 0;
     size_t maxLen = 0;
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
 
     wordList fieldNames = rInfo.fieldsToWrite_.sortedToc();
     forAll(fieldNames, fieldI)
@@ -152,7 +152,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 {
     Info<< "  adiosWrite::fieldWrite: " << rInfo.info() << endl;
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
+    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
 
     wordList fieldNames = rInfo.fieldsToWrite_.sortedToc();
     forAll(fieldNames, fieldI)
