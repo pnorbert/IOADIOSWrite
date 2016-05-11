@@ -183,21 +183,36 @@ protected:
         // Per-region info variables grouped together to be able to create a list of them
         class regionInfo
         {
-        public:
-            //- Normally want auto-write?
-            Switch autoWrite_;
+            //- Read info for one region from its own dictionary
+            void read(const fvMesh& mesh, const dictionary& dict);
 
+            //- reset all information
+            void resetAll();
+
+
+        public:
             //- Name of the region
             word name_;
 
-            //- Names of volume fields per region to write
-            wordReList objectNames_;
+            //- Normally don't want an explicit-write (want auto-write)
+            Switch explicitWrite_;
+
+            //- Names of volume fields to write
+            wordReList requestedFields_;
 
             //- Names of clouds to write
-            wordReList cloudNames_;
+            wordReList requestedClouds_;
 
-            //- Which (additional) attributes to write for particle data
-            wordReList cloudAttribs_;
+            //- Additional attributes to write for particle data
+            wordReList requestedAttrs_;
+
+            //- Names of volume fields to ignore
+            wordReList ignoredFields_;
+
+            //- Names of clouds to ignored
+            wordReList ignoredClouds_;
+
+            // on-the-fly information
 
             //- Fields to be written. Field name as key, class as value
             HashTable<word> fieldsToWrite_;
@@ -208,8 +223,16 @@ protected:
             //- Construct null
             regionInfo()
             :
-                autoWrite_(true)
+                name_(),
+                explicitWrite_(false)
             {};
+
+            //- Construct from dictionary information
+            regionInfo
+            (
+                const fvMesh& mesh,
+                const dictionary& dict
+            );
 
             ~regionInfo() {};
 
@@ -217,30 +240,9 @@ protected:
             //- If auto-write is in effect
             bool autoWrite() const
             {
-                return autoWrite_;
+                return !explicitWrite_;
             }
 
-
-            //- Update the auto-write value if found in the dictionary
-            bool getAutoWrite(const dictionary& dict)
-            {
-                return autoWrite_.readIfPresent("autoWrite", dict);
-            }
-
-
-            //- Read info for one region from its own dictionary
-            void read
-            (
-                const fvMesh& mesh,
-                const dictionary& dict,
-                const dictionary& topDict = dictionary::null
-            );
-
-            //- Clear field to be written
-            void clearFields()
-            {
-                fieldsToWrite_.clear();
-            }
 
             //- Classify fields into the appropriate groups,
             //  returns the number of fields
@@ -252,34 +254,34 @@ protected:
 
 
             //- Path name for regions
-            string regionPath() const
+            inline string regionPath() const
             {
                 return adiosCore::regionPath(name_);
             }
 
             //- Path name for fields
-            fileName fieldPath(const string& var) const
+            inline fileName fieldPath(const string& var) const
             {
                 return adiosCore::fieldPath(name_, var);
             }
 
 
             //- Path name for named cloud
-            fileName cloudPath(const string& cloudName) const
+            inline fileName cloudPath(const string& cloudName) const
             {
                 return adiosCore::cloudPath(name_, cloudName);
             }
 
 
             //- Path name for named cloud
-            fileName cloudPath(const cloudInfo& cinfo) const
+            inline fileName cloudPath(const cloudInfo& cinfo) const
             {
                 return cloudPath(cinfo.name());
             }
 
 
             //- Simple text representation for output purposes
-            word info() const
+            inline word info() const
             {
                 return name_;
             }
@@ -305,7 +307,7 @@ protected:
         scalar restartTime_;
 
         //- List of regions holding all data needed (mesh, names)
-        List<regionInfo> regions_;
+        SLList<regionInfo> regions_;
 
         //- ADIOS input read method (default: BP)
         word readMethod_;

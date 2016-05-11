@@ -1,28 +1,20 @@
-
 functions
 {
     adiosData
     {
         // Write solution (Eulerian, Lagrangian) into ADIOS container
-        type                adiosWrite;
-        #include            "adiosDict";
+        type     adiosWrite;
+        #include "adiosDict";
         functionObjectLibs  ("libIOadiosWrite.so");
 
-        ignore
-        {
-            // clouds to ignore
-            clouds      ( "referr.*" );
-        )
-
-        // Parameters for the selected write method
-        writeOptions    "verbose=4";
+        region   topAir;    // needed for function-object specification
 
         // Write interval (in number of iterations)
         writeInterval       5;
 
-        // Restart with output time not set (do not use if no restart needed)
+        // Restart with output time not step (do not use if no restart needed)
         // e.g. 1.725 will look for adiosData/1.725.bp for checkpoint data
-//        restartTime         0.0005;
+//        restartTime         0.5;
     }
 }
 

@@ -42,20 +42,22 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
         Info<< "  " << info() << endl;
     }
 
-    clearFields(); // clear it because we will add all of them again and again
+    fieldsToWrite_.clear(); // reset
 
+    // clouds are handled elsewhere:
+    wordHashSet ignore(mesh.names<cloud>());
     HashTable<word> unsupported;
 
-    // these are handled elsewhere:
-    wordHashSet ignore(mesh.names<cloud>());
-
-    const wordList allFields = mesh.sortedNames();
+    const wordList allFields = mesh.names();
     if (autoWrite())
     {
         forAll(allFields, i)
         {
             const word& name = allFields[i];
-            if (ignore.found(name)) continue;
+            if (ignore.found(name) || findStrings(ignoredFields_, name))
+            {
+                continue;
+            }
 
             const regIOobject* obj = mesh.find(name)();
             const word& type = obj->type();
@@ -64,18 +66,12 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
             if
             (
                 obj->writeOpt() == IOobject::AUTO_WRITE
-             || findStrings(objectNames_, name)
+             || findStrings(requestedFields_, name)
             )
             {
                 if (supportedFieldType(type))
                 {
                     fieldsToWrite_.insert(name, type);
-                    if (verbose)
-                    {
-                        Info<< "    name = " << name
-                            << " type = " << type
-                            << endl;
-                    }
                 }
                 else
                 {
@@ -86,12 +82,15 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
     }
     else
     {
-        labelList indices = findStrings(objectNames_, allFields);
+        labelList indices = findStrings(requestedFields_, allFields);
 
         forAll(indices, fieldI)
         {
             const word& name = allFields[indices[fieldI]];
-            if (ignore.found(name)) continue;
+            if (ignore.found(name) || findStrings(ignoredFields_, name))
+            {
+                continue;
+            }
 
             const regIOobject* obj = mesh.find(name)();
             const word& type = obj->type();
@@ -99,17 +98,22 @@ Foam::label Foam::adiosWrite::regionInfo::classifyFields
             if (supportedFieldType(type))
             {
                 fieldsToWrite_.insert(name, type);
-                if (verbose)
-                {
-                    Info<< "    name = " << name
-                        << " type = " << type
-                        << endl;
-                }
             }
             else
             {
                 unsupported.set(name, type);
             }
+        }
+    }
+
+    if (verbose)
+    {
+        wordList names = fieldsToWrite_.sortedToc();
+        forAll(names, fieldI)
+        {
+            Info<< "    name = " << fieldsToWrite_[names[fieldI]]
+                << " type = " << fieldsToWrite_[names[fieldI]]
+                << endl;
         }
     }
 
@@ -144,9 +148,9 @@ Foam::label Foam::adiosWrite::classifyFields(bool verbose)
 
 
     label nFields = 0;
-    forAll(regions_, i)
+    forAllIter(SLList<regionInfo>, regions_, iter)
     {
-        regionInfo& r = regions_[i];
+        regionInfo& r = iter();
 
         nFields += r.classifyFields
         (

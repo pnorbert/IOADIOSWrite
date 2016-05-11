@@ -1,15 +1,14 @@
 #!/bin/bash
 
 # Copy base case
-if [ ! -d system ]; then
-  cp -r $FOAM_TUTORIALS/lagrangian/icoUncoupledKinematicParcelFoam/hopper/hopperInitialState/* ./
-fi
+[ -d system ] || cp -r $FOAM_TUTORIALS/lagrangian/icoUncoupledKinematicParcelFoam/hopper/hopperInitialState/* ./
 
-# Insert function object in system/controlDict file
-PRESENT=`cat system/controlDict | grep libIOadiosWrite.so | wc -l`
-if [ $PRESENT -lt '1' ]; then
-  cat functionObjects >> system/controlDict
-fi
+# system/adiosDict
+[ -f system/adiosDict ] || cp adiosDict system/adiosDict
+
+# system/controlDict needs adios function object
+grep "libIOadiosWrite.so" > /dev/null 2>&1 || cat functionObjects >> system/controlDict
+
 
 # Source tutorial run functions
 . $WM_PROJECT_DIR/bin/tools/RunFunctions

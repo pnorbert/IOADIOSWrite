@@ -1,0 +1,78 @@
+/*--------------------------------*- C++ -*----------------------------------*\
+| =========                 |                                                 |
+| \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
+|    \\/     M anipulation  |                                                 |
+\*---------------------------------------------------------------------------*/
+FoamFile
+{
+    version     2.0;
+    format      ascii;
+    class       dictionary;
+    location    "system";
+    note        "control parameters for adios";
+    object      adiosDict;
+}
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+
+// Output write method: 'adios_config -m' to see available methods
+// = MPI               (default)
+// = MPI_AGGREGATE
+// = POSIX
+writeMethod     MPI;
+
+// Parameters for the selected write method
+// = ""               (default)
+// = "verbose=4;num_aggregators=2;num_ost=2" ...
+writeOptions    "";
+
+// Additional items to write, or items to write (when explicit)
+write
+{
+    // Only use explicitly named fields/clouds.
+    // Otherwise select all fields/clouds that have AUTO_WRITE on.
+    explicit    false;
+
+    // Volume fields
+    fields      ();
+
+    // Kinematic clouds
+    clouds      ();
+
+    // Additional cloud attributes to write. Choices:
+    // - Us      = Slip velocity Us = U - Uc
+    cloudAttrs  ();
+}
+
+// Items to suppress from writing
+ignore
+{
+    fields  ();
+    clouds  ();
+    // Future? -> regions ();
+}
+
+
+// Per-region specification - mandatory if "explicit" is true
+/*
+regions
+{
+    region0
+    {
+        write
+        {
+            fields      ();
+            clouds      ();
+            cloudAttrs  ();
+        }
+        ignore
+        {
+            fields      ();
+            clouds      ();
+        }
+    }
+}
+*/
+
+// ************************************************************************* //

@@ -1,10 +1,10 @@
 #!/bin/bash
 
 # Remove decomposition subdirs
-rm -rf processor*
+/bin/rm -rf processor*
 
 # Remove log files
-rm log.*
+/bin/rm log.*
 
 # Clear any reconstructed results
 #foamCleanTutorials
@@ -13,5 +13,5 @@ rm log.*
 foamCleanPolyMesh
 
 # delete ADIOS output
-rm -rf adiosData/*.bp*
+/bin/rm -rf adiosData/*.bp*
 

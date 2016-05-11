@@ -25,8 +25,10 @@ License
 
 #include "adiosWrite.H"
 #include "dictionary.H"
+#include "hashedWordList.H"
 #include "HashSet.H"
 #include "scalar.H"
+#include "SortableList.H"
 #include "FlatListOutput.H"
 
 // some internal pre-processor stringifications
@@ -43,65 +45,123 @@ namespace Foam
 }
 
 
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  //
+
+
+namespace Foam
+{
+//! \cond fileScope
+static dictionary subOrEmptyDict
+(
+    const dictionary& dict,
+    const word& keyword
+)
+{
+    const entry* entryPtr = dict.lookupEntryPtr(keyword, false, false);
+    if (entryPtr)
+    {
+        // let it fail if it is the incorrect type
+        return entryPtr->dict();
+    }
+    else
+    {
+        return dictionary(dict, dictionary(dict.name() + '.' + keyword));
+    }
+}
+}
+//! \endcond
+
+
+// * * * * * * * * * * * * * Private Member Functions * * * * * * * * * * * * //
+
 void Foam::adiosWrite::regionInfo::read
 (
     const fvMesh& mesh,
-    const dictionary& dict,
-    const dictionary& topDict
+    const dictionary& dict
 )
 {
-    Info<< " Region dict: " << name_ << " (mesh " << mesh.name() << ")" << endl;
+    resetAll();
+    name_ = mesh.name(); // ensure absolute consistency
 
-    if (!topDict.empty())
+    Info<< " Region dict: " << name_ << endl;
+
+    const dictionary* writePtr  = dict.subDictPtr("write");
+    const dictionary* ignorePtr = dict.subDictPtr("ignore");
+
+    const dictionary& wrtDict = (writePtr  ? *writePtr  : dictionary::null);
+    const dictionary& ignDict = (ignorePtr ? *ignorePtr : dictionary::null);
+
+    explicitWrite_.readIfPresent("explicit", wrtDict);
+
+    if (explicitWrite_ || wrtDict.found("fields"))
     {
-        getAutoWrite(topDict); // check for auto-write
+        wrtDict.lookup("fields") >> requestedFields_;
+    }
+    if (explicitWrite_ || wrtDict.found("clouds"))
+    {
+        wrtDict.lookup("clouds") >> requestedClouds_;
+    }
+    if (explicitWrite_ || wrtDict.found("cloudAttrs"))
+    {
+        wrtDict.lookup("cloudAttrs") >> requestedAttrs_;
     }
 
-    getAutoWrite(dict);  // check again for auto-write
-
-    wordList toc(dict.toc());
-
-    if (dict.found("objectNames") || !autoWrite_)
+    if (ignDict.found("fields"))
     {
-        dict.lookup("objectNames") >> objectNames_;
+        ignDict.lookup("fields") >> ignoredFields_;
     }
-    if (dict.found("cloudNames") || !autoWrite_)
+    if (ignDict.found("clouds"))
     {
-        dict.lookup("cloudNames") >> cloudNames_;
-    }
-    if (dict.found("cloudAttribs") || !autoWrite_)
-    {
-        dict.lookup("cloudAttribs") >> cloudAttribs_;
+        ignDict.lookup("clouds") >> ignoredClouds_;
     }
 
-    // Do a basic check to see if the objectNames_ is accessible
-
-    DynamicList<word> missing(objectNames_.size());
-    forAll(objectNames_, i)
+    // Check if the requested fields are actually accessible
+    DynamicList<word> missing(requestedFields_.size());
+    forAll(requestedFields_, i)
     {
-        if (mesh.foundObject<regIOobject>(objectNames_[i]))
+        const wordRe& what = requestedFields_[i];
+
+        if (!what.isPattern())
         {
-            Info<< " " << objectNames_[i];
-        }
-        else
-        {
-            missing.append(objectNames_[i]);
+            if (mesh.foundObject<regIOobject>(what))
+            {
+                Info<< " " << what;
+            }
+            else
+            {
+                missing.append(what);
+            }
         }
     }
+
+    // Also print the cloud names
+    forAll(requestedClouds_, i)
+    {
+        Info<< ' ' << requestedClouds_[i];
+    }
+
+    Info<< nl << endl;
 
     if (missing.size())
     {
         WarningInFunction
+            << nl
             << missing.size() << " objects not found in database:" << nl
             << "   " << FlatListOutput<word>(missing) << endl;
     }
+}
 
-    // Also print the cloud names
-    forAll(cloudNames_, i)
-    {
-        Info<< ' ' << cloudNames_[i];
-    }
-    Info<< nl << endl;
+
+void Foam::adiosWrite::regionInfo::resetAll()
+{
+    explicitWrite_ = false;
+    requestedFields_.clear();
+    requestedClouds_.clear();
+    requestedAttrs_.clear();
+    ignoredFields_.clear();
+    ignoredClouds_.clear();
+    fieldsToWrite_.clear();
+    cloudInfo_.clear();
 }
 
 
@@ -177,9 +237,10 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     // region-names attribute (list of strings)
     {
         stringList names(regions_.size());
-        forAll(regions_, regionI)
+        int regI=0;
+        forAllConstIter(SLList<regionInfo>, regions_, iter)
         {
-            names[regionI] = regions_[regionI].name_;
+            names[regI++] = iter().name_;
         }
 
         defineListAttribute("regions", adiosCore::foamAttribute, names);
@@ -191,9 +252,9 @@ size_t Foam::adiosWrite::defineVars(bool updateMesh)
     defineScalarVariable(adiosTime::attr[adiosTime::DT]);
     defineScalarVariable(adiosTime::attr[adiosTime::DT0]);
 
-    forAll(regions_, regionI)
+    forAllIter(SLList<regionInfo>, regions_, iter)
     {
-        regionInfo& rInfo = regions_[regionI];
+        regionInfo& rInfo = iter();
         const fileName varPath = rInfo.regionPath();
 
         const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
@@ -300,6 +361,26 @@ Foam::adiosWrite::adiosWrite
 }
 
 
+Foam::adiosWrite::regionInfo::regionInfo
+(
+    const fvMesh& mesh,
+    const dictionary& dict
+)
+:
+    name_(mesh.name()),
+    explicitWrite_(false),
+    requestedFields_(),
+    requestedClouds_(),
+    requestedAttrs_(),
+    ignoredFields_(),
+    ignoredClouds_(),
+    fieldsToWrite_(),
+    cloudInfo_()
+{
+    read(mesh, dict);
+}
+
+
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
 Foam::adiosWrite::~adiosWrite()
@@ -321,113 +402,96 @@ Foam::adiosWrite::~adiosWrite()
 
 void Foam::adiosWrite::read(const dictionary& dict)
 {
-    // test with auto-write
-    Switch autoWrite = true;
-    autoWrite.readIfPresent("autoWrite", dict); // top-level auto-write?
+    regions_.clear();
 
     // all known regions
-    wordHashSet regionNames(time_.names<fvMesh>());
+    // - in sorted order for consistency, hashed for quick lookup
+    hashedWordList regionNames;
+    {
+        SortableList<word> sorted(time_.names<fvMesh>());
+        regionNames.transfer(sorted);
+    }
+
     // Info<< "Known regions: " << regionNames << endl;
 
-    // Get the list of regions in adiosDict (as name list and dictionary list)
-    const entry* entryPtr = dict.lookupEntryPtr("regions", false, false);
+    // top-level dictionaries
+    dictionary regionsDict = subOrEmptyDict(dict, "regions");
 
-    label nRegion = 0;
-    if (entryPtr->isDict())
+    // verify that "regions" only contains sub-dictionaries
+    // and detect any unknown region names
     {
-        // Regions dictionary
-        const dictionary& allRegionsDict = entryPtr->dict();
+        wordList bad(regionsDict.size());
+        label nbad = 0;
 
-        regions_.setSize
-        (
-            Foam::max
-            (
-                regionNames.size(),
-                allRegionsDict.toc().size()
-            )
-        );
+        wordList warn(regionsDict.size());
+        label nwarn = 0;
 
-        forAllConstIter(dictionary, allRegionsDict, iter)
+        forAllConstIter(dictionary, regionsDict, iter)
         {
-            if (!iter().isDict())
-            {
-                FatalIOErrorInFunction(allRegionsDict)
-                    << "Regions must be specified in dictionary format with "
-                    << "the region name as the keyword"
-                    << exit(FatalIOError);
-            }
-
-            const dictionary& regionDict = iter().dict();
             const word& regName = iter().keyword();
 
-            if (regionDict.lookupOrDefault<Switch>("active", true))
+            if (!regionNames.contains(regName))
             {
-                if (time_.foundObject<fvMesh>(regName))
-                {
-                    regions_[nRegion].name_  = regName;
-
-                    regions_[nRegion].read
-                    (
-                        time_.lookupObject<fvMesh>(regName),
-                        regionDict,
-                        dict
-                    );
-
-                    Info<< regions_[nRegion].info() << endl;
-
-                    ++nRegion;
-                }
-                else
-                {
-                    Info<<"no such region: " << regName << endl;
-                }
+                warn[nwarn++] = regName;
             }
-
-            // remove as treated
-            regionNames.erase(regName);
-        }
-    }
-    else if (autoWrite)
-    {
-        regions_.setSize(regionNames.size());
-    }
-    else if (!autoWrite)
-    {
-        FatalIOErrorInFunction(dict)
-            << "regions must be specified in dictionary format"
-            << exit(FatalIOError);
-    }
-
-    if (autoWrite)
-    {
-        // primary mesh first
-        word regName = primaryMesh_.name();
-        if (regionNames.found(regName))
-        {
-            regions_[nRegion].name_      = regName;
-            regions_[nRegion].autoWrite_ = true;
-            ++nRegion;
-
-            // remove as treated
-            regionNames.erase(regName);
-        }
-
-        wordList regNames = regionNames.sortedToc();
-        forAll(regNames, regI)
-        {
-            const word& regName = regNames[regI];
-
-            if (time_.foundObject<fvMesh>(regName))
+            if (!iter().isDict())
             {
-                // this lookup cannot actually fail
-                regions_[nRegion].name_      = regName;
-                regions_[nRegion].autoWrite_ = true;
-                ++nRegion;
+                bad[nbad++] = regName;
             }
         }
+
+        if (nwarn)
+        {
+            warn.setSize(nwarn);
+
+            WarningInFunction
+                << warn.size() << " unknown regions specified in adiosDict:"
+                << nl
+                << "   " << FlatListOutput<word>(warn) << endl;
+        }
+
+        if (nbad)
+        {
+            bad.setSize(nbad);
+
+            FatalErrorInFunction
+                << bad.size() << " bad region specifications in adiosDict:"
+                << nl
+                << "   " << FlatListOutput<word>(bad) << nl
+                << "must be dictionary format with region-name as the keyword"
+                << nl
+                << exit(FatalIOError);
+        }
     }
 
-    regions_.setSize(nRegion);
+    // for each region
+    // - uses "explicit" entry and "write" and "ignore" sub-dictionaries
+    forAll(regionNames, regI)
+    {
+        // cannot fail since the region name came from previous lookup
+        const word& regName = regionNames[regI];
+        const fvMesh& mesh = time_.lookupObject<fvMesh>(regName);
+
+        const entry* dictPtr = regionsDict.lookupEntryPtr(regName, false, false);
+
+        if (dictPtr)
+        {
+            // make a copy and merge in region-specific content
+            // (overwrite existing entries)
+
+            dictionary mergedDict(regionsDict);
+            mergedDict <<= dictPtr->dict();
+
+            regions_.append(regionInfo(mesh, mergedDict));
+        }
+        else
+        {
+            regions_.append(regionInfo(mesh, dict));
+        }
+
+        Info<< regions_.last().info() << endl;
+    }
+
 
     // Default values prior to lookup in dictionary
     readMethod_  = "BP";
@@ -660,9 +724,9 @@ void Foam::adiosWrite::write()
             time_.deltaT0Value()
         );
 
-        forAll(regions_, regionI)
+        forAllIter(SLList<regionInfo>, regions_, iter)
         {
-            regionInfo& rInfo = regions_[regionI];
+            regionInfo& rInfo = iter();
 
             const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name_);
 

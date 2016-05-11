@@ -1,8 +1,8 @@
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
-|  \\    /   O peration     | Version:  2.0.0                                 |
-|   \\  /    A nd           | Web:      www.OpenFOAM.org                      |
+|  \\    /   O peration     | Version:  plus                                  |
+|   \\  /    A nd           | Web:      www.OpenFOAM.com                      |
 |    \\/     M anipulation  |                                                 |
 \*---------------------------------------------------------------------------*/
 FoamFile
@@ -52,39 +52,40 @@ functions
 {
     adiosData
     {
-        // Write the solution Eeulerian and Lagrangian fields)
-        // into a ADIOS container
+        // Write solution (Eulerian, Lagrangian) into ADIOS container
         type                adiosWrite;
-        
-        // Where to load it from
-        functionObjectLibs  ( "libIOadiosWrite.so" );
-        
-        // Volume fields to write
-        objectNames         ( U p );
-        
-        // Kinematic clouds to write (leave blank to skip)
-        cloudNames          ( kinematicCloud );
-        
-        // Attributes to write for particles. Valid choices are:
-        //  - origProc        = Original process (from where it was injected)
-        //  - origId          = ID on orignal process
-        //  - cell            = Current cell (on local process)
-        //  - currProc        = Current process
-        //  - rho             = Particle density
-        //  - d               = Particle diameter
-        //  - age             = Particle age
-        //  - position        = Position in space
-        //  - U               = Particle velocity
-        //  - Us              = Slip velocity Us = U - Uc
-        cloudAttribs        ( position U Us age );
-        
-        // Output I/O method (e.g. MPI (default), POSIX, MPI_AGGREGATE)
-        // run 'adios_config -m' to see available methods
-        adiosMethod        POSIX
+        // -> normally use #include <-
+        /// #include            "adiosDict";
+        functionObjectLibs  ("libIOadiosWrite.so");
 
-        // Parameters for the selected method, default = ""
-        methodparams       "verbose=4"
-        
+        write
+        {
+            // Only use explicitly named fields/clouds.
+            // Otherwise select all fields/clouds that have AUTO_WRITE on.
+            explicit        true; // default = false
+
+            // Volume fields
+            fields      ( U p );
+
+            // Clouds
+            clouds      ( kinematicCloud );
+
+            // Additional cloud attributes to write. Choices:
+            // - Us      = Slip velocity Us = U - Uc
+            cloudAttrs  ( Us );
+        }
+
+        // Output write method: 'adios_config -m' to see available methods
+        // = MPI               (default)
+        // = MPI_AGGREGATE
+        // = POSIX
+        writeMethod     MPI;
+
+        // Parameters for the selected write method
+        // = ""               (default)
+        // = "verbose=4;num_aggregators=2;num_ost=2" ...
+        writeOptions    "verbose=4"
+
         // Write interval (in number of iterations)
         writeInterval       20;
     }

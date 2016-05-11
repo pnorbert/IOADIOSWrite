@@ -1,9 +1,3 @@
-DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT
-
-          THE CONTENTS OF THIS FILE ARE NOT YET BEING USED
-
-DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT DRAFT
-
 /*--------------------------------*- C++ -*----------------------------------*\
 | =========                 |                                                 |
 | \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox           |
@@ -39,65 +33,52 @@ writeMethod     MPI;
 writeOptions    "";
 
 // Library to load
-libs            ( "libAdiosIo.so" );
+// UNUSED libs            ("libAdiosIo.so");
 
-// Automatically select all volume fields that have AUTO_WRITE on
-autoWrite       true;
-
-// Items to write or (when auto-write is used) additonal items to write
-select
+// Additional items to write, or items to write (when explicit)
+write
 {
+    // Only use explicitly named fields/clouds.
+    // Otherwise select all fields/clouds that have AUTO_WRITE on.
+    explicit    false;
+
     // Volume fields
-    fields          ();
+    fields      ();
 
-    // Kinematic clouds
-    clouds          ();
+    // Clouds
+    clouds      ();
 
-    // Additional write attributes for clouds. Valid choices:
-    // - Us             = Slip velocity Us = U - Uc
-    cloudAttribs    ();
+    // Additional cloud attributes to write. Choices:
+    // - Us      = Slip velocity Us = U - Uc
+    cloudAttrs  ();
 }
 
-
-// Items to suppress writing
+// Items to suppress from writing
 ignore
 {
-    fields  ( );
-    clouds  ( referredParticleCloud );
-    regions ( );
+    fields  ();
+    clouds  ();
+    // Future? -> regions ();
 }
 
 
-// Per-region specification.
-// Mandatory if autoWrite is off.
+// Per-region specification - mandatory if "explicit" is true
 regions
 {
     region0
     {
-        active          true;
-        autoWrite       true;
-        select
+        write
         {
             fields      ();
             clouds      ();
-            cloudAttribs();
+            cloudAttrs  ();
         }
         ignore
         {
             fields      ();
             clouds      ();
-            cloudAttribs();
         }
     }
-
-    region1
-    {
-        active          true;
-        fields          ();
-        clouds          ();
-        cloudAttribs    ();
-    }
-
 }
 
 

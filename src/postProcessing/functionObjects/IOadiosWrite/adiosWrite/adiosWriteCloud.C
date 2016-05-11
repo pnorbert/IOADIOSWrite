@@ -49,14 +49,20 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
     HashTable<const cloud*> allClouds = mesh.lookupClass<cloud>();
 
     label nClouds = 0;
-    SortableList<string> cloudsUsed(r.cloudNames_.size());
+    SortableList<string> cloudsUsed(allClouds.size());
+
+    r.cloudInfo_.clear();
 
     forAllConstIter(HashTable<const cloud*>, allClouds, iter)
     {
         const string& cloudName = (*iter)->name();
         // const string& cloudType = (*iter)->type();
 
-        if (findStrings(r.cloudNames_, cloudName))
+        if (findStrings(r.ignoredClouds_, cloudName))
+        {
+            continue;
+        }
+        if (findStrings(r.requestedClouds_, cloudName))
         {
             cloudsUsed[nClouds++] = cloudName;
         }
@@ -64,8 +70,6 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
     cloudsUsed.setSize(nClouds);
     cloudsUsed.sort();
-
-    r.cloudInfo_.clear();
 
     forAll(cloudsUsed, cloudI)
     {
@@ -375,7 +379,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& r)
         // Write slip velocity Us = U - Uc
         {
             const word what = "Us";
-            if (findStrings(r.cloudAttribs_, what))
+            if (findStrings(r.requestedAttrs_, what))
             {
                 label i = 0;
                 forAllConstIter(basicKinematicCloud, q, pIter)
