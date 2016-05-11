@@ -7,7 +7,7 @@
 [ -f system/adiosDict ] || cp adiosDict system/adiosDict
 
 # system/controlDict needs adios function object
-grep "libIOadiosWrite.so" > /dev/null 2>&1 || cat functionObjects >> system/controlDict
+grep "libIOadiosWrite.so" system/controlDict > /dev/null 2>&1 || cat functionObjects >> system/controlDict
 
 
 # Source tutorial run functions

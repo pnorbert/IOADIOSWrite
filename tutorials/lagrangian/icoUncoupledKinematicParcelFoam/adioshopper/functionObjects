@@ -12,7 +12,7 @@ functions
         {
             // clouds to ignore
             clouds      ( "referr.*" );
-        )
+        }
 
         // Parameters for the selected write method
         writeOptions    "verbose=4";
