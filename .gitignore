@@ -27,7 +27,20 @@
 *.out
 *.app
 
-# Other generated files
+# OpenFOAM Dependency files - anywhere
 *.dep
+
+# OpenFOAM lnInclude (symlink) directories - anywhere
 lnInclude
-linuxGcc*
+
+# OpenFOAM directories - anywhere
+linux*Clang*/
+linux*Gcc*/
+linux*Icc*/
+solaris*Gcc*/
+SunOS*Gcc*/
+platforms/
+
+# tutorials output
+/tutorials/**/adiosData/
+/tutorials/**/processor[0-9]*/
