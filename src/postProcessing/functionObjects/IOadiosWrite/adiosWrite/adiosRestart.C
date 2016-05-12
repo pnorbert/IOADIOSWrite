@@ -42,7 +42,7 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
 {
     Info<< " Read data of step " << bpFile << endl;
 
-    adiosReader reader(bpFile.c_str(), comm_);
+    adiosReader reader(bpFile.c_str(), communicator());
 
     if (!reader.isGood())
     {
@@ -339,7 +339,7 @@ bool Foam::adiosWrite::readCloud
         if (src.nParticle())
         {
             const size_t incr = src.width();
-            size_t nread = reader.getBuffered(src.fullName(), iobuffer_);
+            /* size_t nread = */ reader.getBuffered(src.fullName(), iobuffer_);
 
 #if 1
             const ParticleBinaryBlob& binfo = src.blob();

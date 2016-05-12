@@ -35,7 +35,7 @@ License
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 template<class CloudType>
-size_t Foam::adiosWrite::cloudDefine
+bool Foam::adiosWrite::cloudDefine
 (
     const CloudType& cld,
     cloudInfo& cInfo,
@@ -43,9 +43,6 @@ size_t Foam::adiosWrite::cloudDefine
 )
 {
     typedef OCompactCountStream ParticleCountStream;
-
-    size_t bufLen = 0;
-    size_t maxLen = 0;
 
     const word& cloudName = cInfo.name();
     const word& cloudType = cInfo.type();
@@ -61,7 +58,7 @@ size_t Foam::adiosWrite::cloudDefine
             <<": No particles in cloud. Skipping definition."
             << endl;
 
-        return 0;
+        return false;
     }
 
     //
@@ -100,7 +97,7 @@ size_t Foam::adiosWrite::cloudDefine
             << "  offset:" << FlatListOutput<label>(binfo.offsets()) << nl
             << "  width: " << FlatListOutput<label>(binfo.sizes()) << endl;
 
-        return 0;
+        return false;
     }
 
     // added verbosity
@@ -157,51 +154,31 @@ size_t Foam::adiosWrite::cloudDefine
     const string localDims3  = localDims  + ",3";
     const string globalDims3 = globalDims + ",3";
 
-    {
-        // stream contents
-        const string localBlob  = localDims  + "," + Foam::name(binfo.byteSize());
-        const string globalBlob = globalDims + "," + Foam::name(binfo.byteSize());
-
-        adios_define_var
-        (
-            groupID_,
-            varPath.c_str(),                // name
-            NULL,                           // path (deprecated)
-            adios_unsigned_byte,            // data-type
-            localBlob.c_str(),              // local dimensions
-            globalBlob.c_str(),             // global dimensions
-            offsetDims.c_str()              // local offsets
-        );
-
-        bufLen = nParticle * binfo.byteSize();
-        maxLen = Foam::max(maxLen, bufLen);
-
-        outputSize_ += bufLen;
-    }
-
-    // additional output
-    label nLabels  = 0;
-    label nScalars = 0;
-    label nVectors = 0;
+    // stream contents
+    defineVariable
+    (
+        varPath,                // name
+        adios_unsigned_byte,    // data-type
+        localDims  + "," + Foam::name(binfo.byteSize()),
+        globalDims + "," + Foam::name(binfo.byteSize()),
+        offsetDims              // local offsets
+    );
 
     // additional output - declare in case it is used
     {
-        adios_define_var
+        defineVariable
         (
-            groupID_,
-            (varPath/"Us").c_str(),
-            NULL,
+            varPath/"Us",
             adiosTraits<scalar>::adiosType,
-            localDims3.c_str(),
-            globalDims3.c_str(),
-            offsetDims.c_str()
+            localDims3,
+            globalDims3,
+            offsetDims
         );
-        ++nVectors;
     }
 
-
 #ifdef FOAM_ADIOS_CLOUD_EXPAND
-    // walk the blob framents
+    // walk the blob framents - make runtime selectable?
+    if (true)
     {
         forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
         {
@@ -209,58 +186,42 @@ size_t Foam::adiosWrite::cloudDefine
 
             if (frag.type() == pTraits<label>::typeName)
             {
-                adios_define_var
+                defineVariable
                 (
-                    groupID_,
-                    (varPath/frag.name()).c_str(),
-                    NULL,
+                    varPath/frag.name(),
                     adiosTraits<label>::adiosType,
-                    localDims.c_str(),
-                    globalDims.c_str(),
-                    offsetDims.c_str()
+                    localDims,
+                    globalDims,
+                    offsetDims
                 );
-                ++nLabels;
             }
             else if (frag.type() == pTraits<scalar>::typeName)
             {
-                adios_define_var
+                defineVariable
                 (
-                    groupID_,
-                    (varPath/frag.name()).c_str(),
-                    NULL,
+                    varPath/frag.name(),
                     adiosTraits<scalar>::adiosType,
-                    localDims.c_str(),
-                    globalDims.c_str(),
-                    offsetDims.c_str()
+                    localDims,
+                    globalDims,
+                    offsetDims
                 );
-                ++nScalars;
             }
             else if (frag.type() == pTraits<vector>::typeName)
             {
-                adios_define_var
+                defineVariable
                 (
-                    groupID_,
-                    (varPath/frag.name()).c_str(),
-                    NULL,
+                    varPath/frag.name(),
                     adiosTraits<scalar>::adiosType,
-                    localDims3.c_str(),
-                    globalDims3.c_str(),
-                    offsetDims.c_str()
+                    localDims3,
+                    globalDims3,
+                    offsetDims
                 );
-                ++nVectors;
             }
         }
     }
 #endif /* FOAM_ADIOS_CLOUD_EXPAND */
 
-    outputSize_ += nParticle *
-    (
-        nLabels    * adiosTraits<label>::adiosSize
-      + nScalars   * adiosTraits<scalar>::adiosSize
-      + 3*nVectors * adiosTraits<scalar>::adiosSize
-    );
-
-    return maxLen;
+    return true;
 }
 
 
@@ -343,87 +304,89 @@ void Foam::adiosWrite::cloudWrite
 #endif
 
 #ifdef FOAM_ADIOS_CLOUD_EXPAND
-
-    // expanding particle blob into separate fields
-    // mostly useful for debugging and as a general example of working
-    // with particle blobs
-
-    // walk the blob framents
-    labelBuffer.reserve(nParticle);
-    scalarBuffer.reserve(3*nParticle);
-
-    ParticleBinaryBlob binfo
-    (
-        CloudType::particleType::propertyTypes(),
-        CloudType::particleType::propertyList()
-    );
-
-    List<char> blobBuffer(binfo.byteSize() + 32); // extra generous
-    ParticleOutputStream osblob(blobBuffer, IOstream::BINARY);
-
-    labelBuffer.setSize(nParticle);
-    scalarBuffer.setSize(3*nParticle);
-
-    forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
+    // walk the blob framents - make runtime selectable?
+    if (true)
     {
-        const ParticleBinaryBlob::Fragment& frag = *iter;
+        // expanding particle blob into separate fields
+        // mostly useful for debugging and as a general example of working
+        // with particle blobs
 
-        if (frag.type() == pTraits<label>::typeName)
+        // walk the blob framents
+        labelBuffer.reserve(nParticle);
+        scalarBuffer.reserve(3*nParticle);
+
+        ParticleBinaryBlob binfo
+        (
+            CloudType::particleType::propertyTypes(),
+            CloudType::particleType::propertyList()
+        );
+
+        List<char> blobBuffer(binfo.byteSize() + 32); // extra generous
+        ParticleOutputStream osblob(blobBuffer, IOstream::BINARY);
+
+        labelBuffer.setSize(nParticle);
+        scalarBuffer.setSize(3*nParticle);
+
+        forAllConstIter(ParticleBinaryBlob::Container, binfo, iter)
         {
-            label i = 0;
-            forAllConstIter(typename CloudType, cld, pIter)
+            const ParticleBinaryBlob::Fragment& frag = *iter;
+
+            if (frag.type() == pTraits<label>::typeName)
             {
-                osblob.rewind();
-                osblob << *pIter;   // binary content
+                label i = 0;
+                forAllConstIter(typename CloudType, cld, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
 
-                labelBuffer[i] = frag.getLabel(blobBuffer);
-                ++i;
+                    labelBuffer[i] = frag.getLabel(blobBuffer);
+                    ++i;
+                }
+
+                // Info<< frag.name() << " (" << frag.type() << ") = "
+                //     << FlatListOutput<int>(SubList<int>(labelBuffer, i)) << nl;
+
+                writeVariable(varPath/frag.name(), labelBuffer);
             }
-
-            // Info<< frag.name() << " (" << frag.type() << ") = "
-            //     << FlatListOutput<int>(SubList<int>(labelBuffer, i)) << nl;
-
-            writeVariable(varPath/frag.name(), labelBuffer);
-        }
-        else if (frag.type() == pTraits<scalar>::typeName)
-        {
-            label i = 0;
-            forAllConstIter(typename CloudType, cld, pIter)
+            else if (frag.type() == pTraits<scalar>::typeName)
             {
-                osblob.rewind();
-                osblob << *pIter;   // binary content
+                label i = 0;
+                forAllConstIter(typename CloudType, cld, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
 
-                scalarBuffer[i] = frag.getScalar(blobBuffer);
-                ++i;
+                    scalarBuffer[i] = frag.getScalar(blobBuffer);
+                    ++i;
+                }
+
+                // Info<< frag.name() << " (" << frag.type() << ") = "
+                //     << FlatListOutput<scalar>(SubList<scalar>(scalarBuffer, i)) << nl;
+
+                writeVariable(varPath/frag.name(), scalarBuffer);
             }
-
-            // Info<< frag.name() << " (" << frag.type() << ") = "
-            //     << FlatListOutput<scalar>(SubList<scalar>(scalarBuffer, i)) << nl;
-
-            writeVariable(varPath/frag.name(), scalarBuffer);
-        }
-        else if (frag.type() == pTraits<vector>::typeName)
-        {
-            label i = 0;
-            forAllConstIter(typename CloudType, cld, pIter)
+            else if (frag.type() == pTraits<vector>::typeName)
             {
-                osblob.rewind();
-                osblob << *pIter;   // binary content
-                vector val = frag.getVector(blobBuffer);
+                label i = 0;
+                forAllConstIter(typename CloudType, cld, pIter)
+                {
+                    osblob.rewind();
+                    osblob << *pIter;   // binary content
+                    vector val = frag.getVector(blobBuffer);
 
-                scalarBuffer[3*i+0] = val.x();
-                scalarBuffer[3*i+1] = val.y();
-                scalarBuffer[3*i+2] = val.z();
-                ++i;
+                    scalarBuffer[3*i+0] = val.x();
+                    scalarBuffer[3*i+1] = val.y();
+                    scalarBuffer[3*i+2] = val.z();
+                    ++i;
+                }
+
+                // Info<< frag.name() << " (" << frag.type() << ") = "
+                //     << FlatListOutput<scalar>(SubList<scalar>(scalarBuffer, i)) << nl;
+
+                writeVariable(varPath/frag.name(), scalarBuffer);
             }
-
-            // Info<< frag.name() << " (" << frag.type() << ") = "
-            //     << FlatListOutput<scalar>(SubList<scalar>(scalarBuffer, i)) << nl;
-
-            writeVariable(varPath/frag.name(), scalarBuffer);
         }
     }
-
 #endif /* FOAM_ADIOS_CLOUD_EXPAND */
 }
 

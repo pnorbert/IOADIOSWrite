@@ -2,7 +2,7 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+    \\  /    A nd           | Copyright (C) 2016 OpenCFD Ltd.
      \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
@@ -21,32 +21,35 @@ License
     You should have received a copy of the GNU General Public License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
-Typedef
-    Foam::IOadiosWrite
-
-Description
-    Writes fields and particle clouds to an ADIOS file.
-
-Author
-    Norbert Podhorszki, pnorbert@ornl.gov, 2015
-
 \*---------------------------------------------------------------------------*/
 
-#ifndef IOadiosWrite_H
-#define IOadiosWrite_H
-
 #include "adiosWrite.H"
-#include "IOOutputFilter.H"
+#include "nullObject.H"
+#include "IOstreams.H"
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
+// * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-namespace Foam
+bool Foam::adiosCoreWrite::supportedFieldType(const word& fieldType)
 {
-    typedef IOOutputFilter<adiosWrite> IOadiosWrite;
+    if (isNull(fieldType) || fieldType.empty())
+    {
+        return false;
+    }
+
+    return
+    (
+        fieldType == volScalarField::typeName
+     || fieldType == volVectorField::typeName
+     || fieldType == surfaceScalarField::typeName
+     || fieldType == volSphericalTensorField::typeName
+     || fieldType == volSymmTensorField::typeName
+     || fieldType == volTensorField::typeName
+
+        // internal fields
+     || fieldType == volScalarField::DimensionedInternalField::typeName
+     || fieldType == volVectorField::DimensionedInternalField::typeName
+    );
 }
 
-// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
-
-#endif
 
 // ************************************************************************* //

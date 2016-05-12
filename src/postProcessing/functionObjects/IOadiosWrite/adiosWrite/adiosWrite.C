@@ -31,11 +31,6 @@ License
 #include "SortableList.H"
 #include "FlatListOutput.H"
 
-// some internal pre-processor stringifications
-#undef STRINGIFY
-#undef TO_STRING
-#define STRINGIFY(x) #x
-#define TO_STRING(x) STRINGIFY(x)
 
 // * * * * * * * * * * * * * * Static Data Members * * * * * * * * * * * * * //
 
@@ -165,145 +160,6 @@ void Foam::adiosWrite::regionInfo::resetAll()
 }
 
 
-size_t Foam::adiosWrite::defineVars()
-{
-    Info<< "adiosWrite::defineVars() called at time "
-        << obr_.time().timeName() << " time index "
-        << obr_.time().timeIndex() << endl;
-
-    outputSize_ = 0;
-    size_t maxLen = 0;
-    size_t bufLen = 0;
-
-    // OpenFOAM build information (also contains version)
-    defineAttribute
-    (
-        "version",
-        adiosCore::foamAttribute,
-        Foam::FOAMbuild
-    );
-
-    // OpenFOAM platform tag (WM_ARCH + WM_COMPILER)
-    defineAttribute
-    (
-        "platform",
-        adiosCore::foamAttribute,
-#ifdef FOAM_PLATFORM
-        TO_STRING(FOAM_PLATFORM)
-#else
-        ""
-# error "FOAM_PLATFORM not defined"
-#endif
-    );
-
-    // OpenFOAM label size (32|64)
-    defineIntAttribute
-    (
-        "label-size",
-        adiosCore::foamAttribute,
-        adiosTraits<label>::nBits
-    );
-
-    // OpenFOAM scalar type (single-precision?)
-    defineAttribute
-    (
-        "precision",
-        adiosCore::foamAttribute,
-        adiosTraits<scalar>::precisionName
-    );
-
-    // other general information
-    defineIntAttribute("nProcs",    adiosCore::foamAttribute, Pstream::nProcs());
-    defineIntAttribute("nRegions",  adiosCore::foamAttribute, regions_.size());
-
-    // region-names attribute (list of strings)
-
-    // mesh updated - may also want moved points etc.
-    // this is still not the greatest:
-    {
-        DynamicList<word> names(regions_.size());
-        DynamicList<word> topo(regions_.size());
-        DynamicList<word> moved(regions_.size());
-
-        forAllConstIter(SLList<regionInfo>, regions_, iter)
-        {
-            const regionInfo& rInfo = iter();
-            const word& regName = rInfo.name();
-
-            names.append(regName);
-
-            if (rInfo.topoChanging())
-            {
-                topo.append(rInfo.name());
-            }
-            else if (rInfo.moving())
-            {
-                moved.append(rInfo.name());
-            }
-        }
-
-        defineListAttribute("regions",     adiosCore::foamAttribute, names);
-        defineListAttribute("moving",      adiosCore::foamAttribute, moved);
-        defineListAttribute("topo-change", adiosCore::foamAttribute, topo);
-    }
-
-    // General information (as variable)
-    defineIntVariable(adiosTime::attr[adiosTime::INDEX]);
-    defineScalarVariable(adiosTime::attr[adiosTime::VALUE]);
-    defineScalarVariable(adiosTime::attr[adiosTime::DT]);
-    defineScalarVariable(adiosTime::attr[adiosTime::DT0]);
-
-    forAllIter(SLList<regionInfo>, regions_, iter)
-    {
-        regionInfo& rInfo = iter();
-        const fileName varPath = rInfo.regionPath();
-
-        const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
-        const polyPatchList& patches = mesh.boundaryMesh();
-
-        stringList pNames(patches.size());
-        stringList pTypes(patches.size());
-        forAll(patches, patchI)
-        {
-            const polyPatch& p = patches[patchI];
-
-            pNames[patchI] = p.name();
-            pTypes[patchI] = p.type();
-        }
-
-        defineIntAttribute("nPatches",     varPath, patches.size());
-        defineListAttribute("patch-names", varPath, pNames);
-        defineListAttribute("patch-types", varPath, pTypes);
-
-        bufLen = meshDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
-
-        bufLen = fieldDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
-
-        bufLen = cloudDefine(rInfo);
-        maxLen = Foam::max(maxLen, bufLen);
-    }
-
-    return maxLen;
-}
-
-
-void Foam::adiosWrite::deleteDefinitions()
-{
-    // Info<< "adiosWrite::deleteDefinitions() called at time "
-    //     << obr_.time().timeName() << " time index "
-    //     << obr_.time().timeIndex() << endl;
-
-    // In ADIOS we need to remove all variable definitions in order
-    // to make a new list of definitions in case the mesh changes
-    adios_delete_vardefs(groupID_);
-
-    // also cleanup all old attributes
-    adios_delete_attrdefs(groupID_);
-}
-
-
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
 Foam::adiosWrite::adiosWrite
@@ -314,7 +170,7 @@ Foam::adiosWrite::adiosWrite
     const bool loadFromFiles
 )
 :
-    adiosCore(groupName),
+    adiosCoreWrite(groupName, dict),
     obr_(obr),
     time_(refCast<const fvMesh>(obr).time()),
     restartIndex_(-1)
@@ -323,35 +179,12 @@ Foam::adiosWrite::adiosWrite
         << " procs) with primary mesh "
         << refCast<const fvMesh>(obr).name() << endl;
 
-    if (Pstream::nProcs() == 1)
-    {
-        // is serial - must do MPI_Init() ourselves
-        MPI_Init(NULL, NULL);  // NULL args are OK for openmpi, mpich-2
-    }
-
-    MPI_Comm_dup(MPI_COMM_WORLD, &comm_);
-
-    // Initialize ADIOS
-    adios_init_noxml(comm_);
-
-    // Create a group to hold all variable definitions
-    adios_declare_group(&groupID_, name().c_str(), "", adios_flag_yes);
-
     // Set next write NOW
     nextWrite_ = 0;
     timeSteps_ = 0;
 
     // Read dictionary
     read(dict);
-
-    // Set the actual output method here for the ADIOS group
-    adios_select_method
-    (
-        groupID_,
-        writeMethod_.c_str(),
-        writeParams_.c_str(),
-        ""  // base-path (unused) needs empty string, not a NULL pointer
-    );
 
     // Write initial conditions (including mesh) if restartTime not set
     if (restartTime_ == VGREAT)
@@ -386,18 +219,7 @@ Foam::adiosWrite::regionInfo::regionInfo
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
 Foam::adiosWrite::~adiosWrite()
-{
-    adios_free_group(groupID_); // not necessary but nice to cleanup
-    adios_finalize(Pstream::myProcNo());
-
-    MPI_Comm_free(&comm_);
-
-    if (Pstream::nProcs() == 1)
-    {
-        // is serial - must do MPI_Finalize() ourselves
-        MPI_Finalize();
-    }
-}
+{}
 
 
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
@@ -495,17 +317,6 @@ void Foam::adiosWrite::read(const dictionary& dict)
     }
 
 
-    // Default values prior to lookup in dictionary
-    readMethod_  = "BP";
-    writeMethod_ = "MPI";
-    writeParams_ = "";
-
-    dict.readIfPresent("readMethod",  readMethod_);
-    dict.readIfPresent("adiosMethod", writeMethod_);  // old name
-    dict.readIfPresent("writeMethod", writeMethod_);
-    dict.readIfPresent("methodparams", writeParams_); // old name
-    dict.readIfPresent("writeOptions", writeParams_);
-
     writeInterval_ = dict.lookupOrDefault<label>("writeInterval", 1);
 
     // Print info to terminal
@@ -530,10 +341,29 @@ void Foam::adiosWrite::read(const dictionary& dict)
             << exit(FatalIOError);
     }
 
-    Info<< type() << " " << name() << ":" << nl
-        << "  ADIOS writeMethod: " << writeMethod_ << nl
-        << "        writeParams: " << writeParams_ << nl
-        << "     write interval: " << writeInterval_ << endl;
+//     Info<< type() << " " << name() << ":" << nl
+//         << "  ADIOS writeMethod: " << writeMethod_ << nl
+//         << "        writeParams: " << writeParams_ << nl;
+}
+
+
+bool Foam::adiosWrite::open(const Time& t)
+{
+    // Create output directory if initially non-existent
+    static bool checkdir = true;
+    if (checkdir && !isDir(dataDirectory))
+    {
+        mkDir(dataDirectory);
+    }
+    checkdir = false;
+
+    if (adiosCoreWrite::open(dataDirectory/t.timeName() + ".bp"))
+    {
+        adiosCoreWrite::writeTime(t);
+        return true;
+    }
+
+    return false;
 }
 
 
@@ -635,8 +465,7 @@ void Foam::adiosWrite::write()
     const bool writeNow = (timeSteps_ == nextWrite_);
     if (writeNow)
     {
-        // time of next write
-        nextWrite_ = timeSteps_ + writeInterval_;
+        nextWrite_ = timeSteps_ + writeInterval_; // time of next write
     }
 
     if (writeNow && restartIndex_ == obr_.time().timeIndex())
@@ -648,15 +477,15 @@ void Foam::adiosWrite::write()
     {
         Info<< "Writing ADIOS data for time " << obr_.time().timeName() << endl;
 
-        // Re-write mesh if first time or any of the meshes changed
-        forAllConstIter(SLList<regionInfo>, regions_, iter)
+        // Write mesh on any change, or at the first time-step
+        forAllConstIter(RegionInfoContainer, regions_, iter)
         {
             const regionInfo& rInfo = iter();
 
             rInfo.meshChanging
             (
-                (timeSteps_ == 0),
-                time_.lookupObject<fvMesh>(rInfo.name())
+                time_.lookupObject<fvMesh>(rInfo.name()),
+                (timeSteps_ == 0)
             );
         }
 
@@ -680,70 +509,128 @@ void Foam::adiosWrite::write()
         */
 #endif
 
+        classifyFields(true); // verbose
+
         // remove old ADIOS variables/attributes
         // - new variables may have appeared (eg, via function objects) etc
         // - patch sizes may change with every step
         // -> simply update everything for simplicity
-        deleteDefinitions();
+        adiosCoreWrite::reset();
 
-        classifyFields(true); // verbose
+        defineVars();  // ADIOS requires variables to be defined before writing
+        open(time_);   // ADIOS output file for this time step
+        writeVars();
 
-        // ADIOS requires to define all variables before writing anything
-        Info<< "Define variables in ADIOS" << endl;
-
-        size_t maxLen = defineVars();
-
-        // Pout<<"reserve write buffer " << maxLen << endl;
-        iobuffer_.reserve(maxLen); // NEEDS attention if iobuffer is not char!
-
-        // Create/reopen ADIOS output file, and tell ADIOS how many bytes we
-        // are going to write
-        open();
-
-        // General information (as variable)
-        writeIntVariable
-        (
-            adiosTime::attr[adiosTime::INDEX],
-            time_.timeIndex()
-        );
-        writeScalarVariable
-        (
-            adiosTime::attr[adiosTime::VALUE],
-            time_.timeOutputValue()
-        );
-        writeScalarVariable
-        (
-            adiosTime::attr[adiosTime::DT],
-            time_.deltaTValue()
-        );
-        writeScalarVariable
-        (
-            adiosTime::attr[adiosTime::DT0],
-            time_.deltaT0Value()
-        );
-
-        forAllIter(SLList<regionInfo>, regions_, iter)
-        {
-            regionInfo& rInfo = iter();
-
-            // Re-write mesh if dynamic or first time
-            meshWrite(rInfo);
-
-            // Write field data
-            fieldWrite(rInfo);
-
-            // Write cloud data
-            cloudWrite(rInfo);
-        }
-
-        // Close the ADIOS dataset at every timestep. It must be closed!
-        // Data is flushed from memory at this point
-        close();
+        // close ADIOS dataset at every timestep - flushes data from memory
+        adiosCoreWrite::close();
     }
 
-    // Update counter
-    ++timeSteps_;
+    ++timeSteps_; // update counter
 }
 
+
+// * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * *  //
+
+
+void Foam::adiosWrite::defineVars()
+{
+    Info<< "adiosWrite::defineVars() called at time "
+        << obr_.time().timeName() << " time index "
+        << obr_.time().timeIndex() << endl;
+
+    adiosCoreWrite::defineBaseAttributes();
+
+    // other general information
+    defineIntAttribute("nRegions",  adiosCore::foamAttribute, regions_.size());
+
+    // region-names attribute (list of strings)
+
+    // mesh updated - may also want moved points etc.
+    // this is still not the greatest:
+    {
+        DynamicList<word> names(regions_.size());
+        DynamicList<word> topo(regions_.size());
+        DynamicList<word> moved(regions_.size());
+
+        forAllConstIter(RegionInfoContainer, regions_, iter)
+        {
+            const regionInfo& rInfo = iter();
+            const word& regName = rInfo.name();
+
+            names.append(regName);
+
+            if (rInfo.topoChanging())
+            {
+                topo.append(rInfo.name());
+            }
+            else if (rInfo.moving())
+            {
+                moved.append(rInfo.name());
+            }
+        }
+
+        defineListAttribute("regions",     adiosCore::foamAttribute, names);
+        defineListAttribute("moving",      adiosCore::foamAttribute, moved);
+        defineListAttribute("topo-change", adiosCore::foamAttribute, topo);
+    }
+
+    adiosCoreWrite::defineTime();
+
+    forAllIter(RegionInfoContainer, regions_, iter)
+    {
+        regionInfo& rInfo = iter();
+        const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
+
+        definePatchAttributes(mesh);
+
+        if (rInfo.changing())
+        {
+            defineMeshPoints(mesh);
+
+            if (rInfo.topoChanging())
+            {
+                defineMeshFaces(mesh);
+            }
+        }
+
+
+        fieldDefine(rInfo);
+        cloudDefine(rInfo);
+    }
+}
+
+
+void Foam::adiosWrite::writeVars()
+{
+    // reserve io-buffer to avoid reallocations when writing
+    // Needs attention if iobuffer is not char!
+
+    iobuffer_.reserve(adiosCoreWrite::maxSize());
+
+    forAllIter(RegionInfoContainer, regions_, iter)
+    {
+        regionInfo& rInfo = iter();
+
+        // Re-write mesh if dynamic or first time
+        if (rInfo.changing())
+        {
+            const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
+
+            Info<< "adiosWrite: write mesh " << mesh.name()
+                << " at time " << mesh.time().timeName()
+                << (rInfo.moving() ? " (points only)" : "") << endl;
+
+            writeMeshPoints(mesh);
+            if (rInfo.topoChanging())
+            {
+                writeMeshFaces(mesh);
+            }
+        }
+
+        fieldWrite(rInfo);
+        cloudWrite(rInfo);
+    }
+
+}
 
 // ************************************************************************* //

@@ -24,42 +24,149 @@ License
 \*---------------------------------------------------------------------------*/
 
 #include "adiosWrite.H"
+#include "basicKinematicCloud.H"
+#include "nullObject.H"
+#include "FlatListOutput.H"
 #include "IOstreams.H"
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-bool Foam::adiosWrite::supportedFieldType(const word& fieldType)
+Foam::label Foam::adiosWrite::regionInfo::classifyFields
+(
+    const fvMesh& mesh,
+    bool verbose
+)
 {
-    if (isNull(fieldType) || fieldType.empty())
+    if (verbose)
     {
-        return false;
+        Info<< "  " << info() << endl;
     }
 
-    return
-    (
-        fieldType == volScalarField::typeName
-     || fieldType == volVectorField::typeName
-     || fieldType == surfaceScalarField::typeName
-     || fieldType == volSphericalTensorField::typeName
-     || fieldType == volSymmTensorField::typeName
-     || fieldType == volTensorField::typeName
+    fieldsToWrite_.clear(); // reset
 
-        // internal fields
-     || fieldType == volScalarField::DimensionedInternalField::typeName
-     || fieldType == volVectorField::DimensionedInternalField::typeName
-    );
+    // clouds are handled elsewhere:
+    wordHashSet ignore(mesh.names<cloud>());
+    HashTable<word> unsupported;
+
+    const wordList allFields = mesh.names();
+    if (autoWrite())
+    {
+        forAll(allFields, i)
+        {
+            const word& name = allFields[i];
+            if (ignore.found(name) || findStrings(ignoredFields_, name))
+            {
+                continue;
+            }
+
+            const regIOobject* obj = mesh.find(name)();
+            const word& type = obj->type();
+
+            // auto-write field or explicitly requested
+            if
+            (
+                obj->writeOpt() == IOobject::AUTO_WRITE
+             || findStrings(requestedFields_, name)
+            )
+            {
+                if (supportedFieldType(type))
+                {
+                    fieldsToWrite_.insert(name, type);
+                }
+                else
+                {
+                    unsupported.set(name, type);
+                }
+            }
+        }
+    }
+    else
+    {
+        labelList indices = findStrings(requestedFields_, allFields);
+
+        forAll(indices, fieldI)
+        {
+            const word& name = allFields[indices[fieldI]];
+            if (ignore.found(name) || findStrings(ignoredFields_, name))
+            {
+                continue;
+            }
+
+            const regIOobject* obj = mesh.find(name)();
+            const word& type = obj->type();
+
+            if (supportedFieldType(type))
+            {
+                fieldsToWrite_.insert(name, type);
+            }
+            else
+            {
+                unsupported.set(name, type);
+            }
+        }
+    }
+
+    if (verbose)
+    {
+        wordList names = fieldsToWrite_.sortedToc();
+        forAll(names, fieldI)
+        {
+            Info<< "    " << names[fieldI] << "  ("
+                << fieldsToWrite_[names[fieldI]] << ")" << endl;
+        }
+    }
+
+    if (!unsupported.empty())
+    {
+        wordList names = unsupported.sortedToc();
+        wordList types(names.size());
+
+        forAll(names, fieldI)
+        {
+            types[fieldI] = unsupported[names[fieldI]];
+        }
+
+        WarningInFunction
+            << nl
+            << unsupported.size() << " fields not handled by adiosWrite" << nl
+            << "  names: " << FlatListOutput<word>(names) << nl
+            << "  types: " << FlatListOutput<word>(types) << nl << endl;
+    }
+
+
+    return fieldsToWrite_.size();
 }
 
 
-size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
+Foam::label Foam::adiosWrite::classifyFields(bool verbose)
 {
+    if (verbose)
+    {
+        Info<< endl << "Foam::adiosWrite::classifyFields:" << endl;
+    }
+
+    label nFields = 0;
+    forAllIter(RegionInfoContainer, regions_, iter)
+    {
+        regionInfo& r = iter();
+
+        nFields += r.classifyFields
+        (
+            time_.lookupObject<fvMesh>(r.name()),
+            verbose
+        );
+    }
+
+    return nFields;
+}
+
+
+Foam::label Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
+{
+    label nFields = 0;
     Info<< "  adiosWrite::fieldDefine: " << rInfo.info() << endl;
 
-    size_t bufLen = 0;
-    size_t maxLen = 0;
-
     const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
-
     wordList fieldNames = rInfo.fieldsToWrite_.sortedToc();
     forAll(fieldNames, fieldI)
     {
@@ -74,9 +181,11 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
 
         regIOobject* obj = mesh.find(fieldName)();
 
+        int64_t varid = -1;
+
         if (fieldType == volScalarField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<volScalarField&>(*obj),
                 varPath
@@ -84,7 +193,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volVectorField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<volVectorField&>(*obj),
                 varPath
@@ -92,7 +201,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == surfaceScalarField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<surfaceScalarField&>(*obj),
                 varPath
@@ -100,7 +209,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volSphericalTensorField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<volSphericalTensorField&>(*obj),
                 varPath
@@ -108,7 +217,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volSymmTensorField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<volSymmTensorField&>(*obj),
                 varPath
@@ -116,7 +225,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volTensorField::typeName)
         {
-            bufLen = fieldDefine
+            varid = defineField
             (
                 static_cast<volTensorField&>(*obj),
                 varPath
@@ -124,8 +233,7 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volScalarField::DimensionedInternalField::typeName)
         {
-            // internal fields
-            bufLen = fieldDefineInternal
+            varid = defineInternalField
             (
                 static_cast<volScalarField::DimensionedInternalField&>(*obj),
                 varPath
@@ -133,18 +241,20 @@ size_t Foam::adiosWrite::fieldDefine(const regionInfo& rInfo)
         }
         else if (fieldType == volVectorField::DimensionedInternalField::typeName)
         {
-            // internal fields
-            bufLen = fieldDefineInternal
+            varid = defineInternalField
             (
                 static_cast<volVectorField::DimensionedInternalField&>(*obj),
                 varPath
             );
         }
 
-        maxLen = Foam::max(maxLen, bufLen);
+        if (varid != -1)
+        {
+            ++nFields;
+        }
     }
 
-    return maxLen;
+    return nFields;
 }
 
 
@@ -170,7 +280,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
 
         if (fieldType == volScalarField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<volScalarField&>(*obj),
                 varPath
@@ -178,7 +288,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volVectorField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<volVectorField&>(*obj),
                 varPath
@@ -186,7 +296,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == surfaceScalarField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<surfaceScalarField&>(*obj),
                 varPath
@@ -194,7 +304,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volSphericalTensorField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<volSphericalTensorField&>(*obj),
                 varPath
@@ -202,7 +312,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volSymmTensorField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<volSymmTensorField&>(*obj),
                 varPath
@@ -210,7 +320,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volTensorField::typeName)
         {
-            fieldWrite
+            writeField
             (
                 static_cast<volTensorField&>(*obj),
                 varPath
@@ -218,8 +328,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volScalarField::DimensionedInternalField::typeName)
         {
-            // internal fields
-            fieldWrite
+            writeField
             (
                 static_cast<volScalarField::DimensionedInternalField&>(*obj),
                 varPath
@@ -227,8 +336,7 @@ void Foam::adiosWrite::fieldWrite(const regionInfo& rInfo)
         }
         else if (fieldType == volVectorField::DimensionedInternalField::typeName)
         {
-            // internal fields
-            fieldWrite
+            writeField
             (
                 static_cast<volVectorField::DimensionedInternalField&>(*obj),
                 varPath

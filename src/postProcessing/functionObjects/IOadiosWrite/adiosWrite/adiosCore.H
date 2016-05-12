@@ -135,7 +135,7 @@ public:
         //- Search a given directory for ADIOS time files
         static instantList findTimes
         (
-            const fileName& directory = fileName::null,
+            const fileName& directory = dataDirectory,
             const word& constantName  = "constant"
         );
 

@@ -1,17 +1,19 @@
 adiosWrite/adiosTypes.C
 
 adiosWrite/adiosCore.C
+adiosWrite/adiosCoreWrite.C
+adiosWrite/adiosCoreWriteMesh.C
+adiosWrite/adiosCoreWriteField.C
+
 adiosWrite/adiosTime.C
 adiosWrite/adiosReader.C
 adiosWrite/adiosReaderCloudInfo.C
 adiosWrite/adiosReaderVarInfo.C
+
 adiosWrite/adiosWrite.C
-adiosWrite/adiosWriteFunctionObject.C
-adiosWrite/adiosWriteGrouping.C
 adiosWrite/adiosWriteField.C
 adiosWrite/adiosWriteCloud.C
-adiosWrite/adiosWriteMesh.C
-adiosWrite/adiosOps.C
+adiosWrite/adiosWriteFunctionObject.C
 adiosWrite/adiosRestart.C
 
 adiosWrite/ParticleBinaryBlob.C

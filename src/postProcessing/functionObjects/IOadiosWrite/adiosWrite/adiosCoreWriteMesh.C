@@ -2,8 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
-     \\/     M anipulation  | Copyright (C) 2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright (C) 2016 OpenCFD Ltd.
+     \\/     M anipulation  |
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -23,38 +23,47 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "adiosWrite.H"
+#include "adiosCoreWrite.H"
+#include "polyMesh.H"
 
-// * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
-size_t Foam::adiosWrite::meshDefine(const regionInfo& rInfo)
+// * * * * * * * * * * * * * * Member Functions * * * * * * * * * * * * * * * //
+
+void Foam::adiosCoreWrite::definePatchAttributes(const polyMesh& mesh)
 {
-    if (!rInfo.changing())
+    const polyPatchList& patches = mesh.boundaryMesh();
+    stringList pNames(patches.size());
+    stringList pTypes(patches.size());
+    forAll(patches, patchI)
     {
-        return 0;
+        const polyPatch& p = patches[patchI];
+
+        pNames[patchI] = p.name();
+        pTypes[patchI] = p.type();
     }
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
+    const fileName varPath = adiosCore::regionPath(mesh.name());
 
-    Info<< "adiosWrite::meshDefine: " << mesh.name() << " at time "
-        << mesh.time().timeName() << endl;
+    defineIntAttribute("nPatches",     varPath, patches.size());
+    defineListAttribute("patch-names", varPath, pNames);
+    defineListAttribute("patch-types", varPath, pTypes);
+}
 
+
+void Foam::adiosCoreWrite::defineMeshPoints(const polyMesh& mesh)
+{
     const fileName varPath = adiosCore::meshPath(mesh.name());
 
-    OutputCounter os(adiosCore::strFormat);
-    size_t bufLen = 0;
-    size_t maxLen = 0;
-
-    // summary information
-    defineIntVariable(varPath/"nPoints");       // polyMesh/nPoints
-
+    // polyMesh/nPoints (summary)
     // polyMesh/points: 2D array (N points x 3 coordinates)
+    defineIntVariable(varPath/"nPoints");
     defineVectorVariable(varPath/"points",  mesh.nPoints());
+}
 
-    if (!rInfo.topoChanging())
-    {
-        return maxLen;
-    }
+
+void Foam::adiosCoreWrite::defineMeshFaces(const polyMesh& mesh)
+{
+    const fileName varPath = adiosCore::meshPath(mesh.name());
 
     defineIntVariable(varPath/"nCells");        // polyMesh/nCells
     defineIntVariable(varPath/"nFaces");        // polyMesh/nFaces
@@ -68,8 +77,7 @@ size_t Foam::adiosWrite::meshDefine(const regionInfo& rInfo)
         // indices = nFaces+1
         label count = faces.size()+1;
 
-        bufLen = defineIntVariable(varPath/"faces"/"indices", count);
-        maxLen = Foam::max(maxLen, bufLen);
+        defineIntVariable(varPath/"faces"/"indices", count);
 
         // count size for compact format
         count = 0;
@@ -78,8 +86,7 @@ size_t Foam::adiosWrite::meshDefine(const regionInfo& rInfo)
             count += faces[faceI].size();
         }
 
-        bufLen = defineIntVariable(varPath/"faces"/"content", count);
-        maxLen = Foam::max(maxLen, bufLen);
+        defineIntVariable(varPath/"faces"/"content", count);
     }
 
     // polyMesh/owner - direct write
@@ -90,44 +97,41 @@ size_t Foam::adiosWrite::meshDefine(const regionInfo& rInfo)
 
     // polyMesh/boundary - byte-stream
     {
-        os.rewind();
+        OutputCounter os(adiosCore::strFormat);
         os << mesh.boundaryMesh();
 
-        bufLen = defineStreamVariable(varPath/"boundary", os.size());
-        maxLen = Foam::max(maxLen, bufLen);
+        defineStreamVariable(varPath/"boundary", os.size());
     }
-
-    return maxLen;
 }
 
 
-void Foam::adiosWrite::meshWrite(const regionInfo& rInfo)
+void Foam::adiosCoreWrite::defineMesh(const polyMesh& mesh)
 {
-    if (!rInfo.changing())
-    {
-        return;
-    }
+    defineMeshPoints(mesh);
+    defineMeshFaces(mesh);
+}
 
-    const fvMesh& mesh = time_.lookupObject<fvMesh>(rInfo.name());
 
-    Info<< "adiosWrite::meshWrite: " << mesh.name() << " at time "
-        << mesh.time().timeName() << endl;
-
+void Foam::adiosCoreWrite::writeMeshPoints(const polyMesh& mesh)
+{
     const fileName varPath = adiosCore::meshPath(mesh.name());
 
     writeIntVariable(varPath/"nPoints", mesh.nPoints());
+    writeVariable(varPath/"points",     mesh.points());
+}
 
-    // polyMesh/points: 2D array (N points x 3 coordinates)
-    writeVariable(varPath/"points", mesh.points());
 
-    if (!rInfo.topoChanging())
-    {
-        return;
-    }
+void Foam::adiosCoreWrite::writeMeshFaces(const polyMesh& mesh)
+{
+    const fileName varPath = adiosCore::meshPath(mesh.name());
 
     writeIntVariable(varPath/"nCells",  mesh.nCells());
     writeIntVariable(varPath/"nFaces",  mesh.nFaces());
     writeIntVariable(varPath/"nInternalFaces", mesh.nInternalFaces());
+
+    // use iobuffer_ to avoid reallocations
+    // Needs rework?
+    iobuffer_.reserve(adiosCoreWrite::maxSize());
 
     // polyMesh/faces - save in compact form
     // for this we use two separate lists
@@ -208,6 +212,13 @@ void Foam::adiosWrite::meshWrite(const regionInfo& rInfo)
 
         writeVariable(varPath/"boundary", iobuffer_);
     }
+}
+
+
+void Foam::adiosCoreWrite::writeMesh(const polyMesh& mesh)
+{
+    writeMeshPoints(mesh);
+    writeMeshFaces(mesh);
 }
 
 

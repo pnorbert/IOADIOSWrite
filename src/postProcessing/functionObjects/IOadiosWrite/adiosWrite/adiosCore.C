@@ -93,7 +93,7 @@ Foam::instantList Foam::adiosCore::findTimes
 )
 {
     // Read directory entries into a list
-    fileNameList dirEntries(readDir(directory/dataDirectory, fileName::FILE, false));
+    fileNameList dirEntries(readDir(directory, fileName::FILE, false));
 
     // Initialise instant list
     instantList Times(dirEntries.size() + 1);
@@ -111,7 +111,7 @@ Foam::instantList Foam::adiosCore::findTimes
         {
             Times[nTimes].value() = 0;
             Times[nTimes].name()  = dataDirectory/dirEntries[i];
-            nTimes++;
+            ++nTimes;
             haveConstant = true;
             break;
         }
@@ -132,7 +132,7 @@ Foam::instantList Foam::adiosCore::findTimes
             {
                 Times[nTimes].value() = timeToken.number();
                 Times[nTimes].name()  = dataDirectory/dirEntries[i];
-                nTimes++;
+                ++nTimes;
             }
         }
     }
@@ -155,34 +155,5 @@ Foam::instantList Foam::adiosCore::findTimes
     return Times;
 }
 
-
-/// Foam::word Foam::Time::findInstancePath(const instant& t) const
-/// {
-///     const fileName directory = path();
-///     const word& constantName = constant();
-///
-///     // Read directory entries into a list
-///     fileNameList dirEntries(readDir(directory, fileName::DIRECTORY));
-///
-///     forAll(dirEntries, i)
-///     {
-///         scalar timeValue;
-///         if (readScalar(dirEntries[i].c_str(), timeValue) && t.equal(timeValue))
-///         {
-///             return dirEntries[i];
-///         }
-///     }
-///
-///     if (t.equal(0.0))
-///     {
-///         // Looking for 0 or constant. 0 already checked above.
-///         if (isDir(directory/constantName))
-///         {
-///             return constantName;
-///         }
-///     }
-///
-///     return word::null;
-/// }
 
 // ************************************************************************* //

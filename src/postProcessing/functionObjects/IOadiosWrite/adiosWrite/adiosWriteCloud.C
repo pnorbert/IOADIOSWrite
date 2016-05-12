@@ -75,7 +75,7 @@ Foam::word Foam::adiosWrite::supportedCloudType(const word& cloudType)
 }
 
 
-size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
+Foam::label Foam::adiosWrite::cloudDefine(regionInfo& r)
 {
     Info<< "  adiosWrite::cloudDefine: " << r.info() << endl;
 
@@ -139,8 +139,6 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
     // Info<< "got clouds " << cloudsUsed << nl;
 
-    size_t maxLen = 0;
-
     const wordList cloudNames = cloudsUsed.sortedToc();
     forAll(cloudNames, cloudI)
     {
@@ -152,12 +150,12 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
 
         regIOobject* obj = mesh.find(cloudName)();
 
-        size_t bufLen = 0;
+        bool ok = false;
 
         // this needs reworking:
         if (dispatch == Cloud<indexedParticle>::typeName)
         {
-            bufLen = cloudDefine
+            ok = cloudDefine
             (
                 static_cast<Cloud<indexedParticle>&>(*obj),
                 cInfo,
@@ -166,7 +164,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         }
         else if (dispatch == Cloud<passiveParticle>::typeName)
         {
-            bufLen = cloudDefine
+            ok = cloudDefine
             (
                 static_cast<Cloud<passiveParticle>&>(*obj),
                 cInfo,
@@ -175,7 +173,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         }
         else if (dispatch == Cloud<basicKinematicCollidingParcel>::typeName)
         {
-            bufLen = cloudDefine
+            ok = cloudDefine
             (
                 static_cast<Cloud<basicKinematicCollidingParcel>&>(*obj),
                 cInfo,
@@ -184,7 +182,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         }
         else if (dispatch == Cloud<basicKinematicMPPICParcel>::typeName)
         {
-            bufLen = cloudDefine
+            ok = cloudDefine
             (
                 static_cast<Cloud<basicKinematicMPPICParcel>&>(*obj),
                 cInfo,
@@ -193,7 +191,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         }
         else if (dispatch == Cloud<basicKinematicParcel>::typeName)
         {
-            bufLen = cloudDefine
+            ok = cloudDefine
             (
                 static_cast<Cloud<basicKinematicParcel>&>(*obj),
                 cInfo,
@@ -207,9 +205,8 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         // else if (dispatch == Cloud<solidParticle>::typeName)
         // else if (dispatch == Cloud<basicSprayParcel>::typeName)
 
-        if (bufLen)
+        if (ok)
         {
-            maxLen = Foam::max(maxLen, bufLen);
             r.cloudInfo_.append(cInfo);
         }
     }
@@ -218,7 +215,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
     if (nClouds)
     {
         DynamicList<word> names(nClouds);
-        forAllConstIter(SLList<cloudInfo>, r.cloudInfo_, iter)
+        forAllConstIter(regionInfo::CloudInfoContainer, r.cloudInfo_, iter)
         {
             const cloudInfo& cInfo = iter();
 
@@ -232,7 +229,7 @@ size_t Foam::adiosWrite::cloudDefine(regionInfo& r)
         defineListAttribute("clouds", varPath, names);
     }
 
-    return maxLen;
+    return nClouds;
 }
 
 
@@ -244,7 +241,7 @@ void Foam::adiosWrite::cloudWrite(const regionInfo& rInfo)
     DynamicList<label> labelBuffer;
     DynamicList<scalar> scalarBuffer;
 
-    forAllConstIter(SLList<cloudInfo>, rInfo.cloudInfo_, iter)
+    forAllConstIter(regionInfo::CloudInfoContainer, rInfo.cloudInfo_, iter)
     {
         const cloudInfo& cInfo = iter();
         const word&  cloudName = cInfo.name();

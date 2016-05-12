@@ -2,9 +2,8 @@
   =========                 |
   \\      /  F ield         | OpenFOAM: The Open Source CFD Toolbox
    \\    /   O peration     |
-    \\  /    A nd           | Copyright (C) 2011 OpenFOAM Foundation
-     \\/     M anipulation  |               2015 Norbert Podhorszki
-                            |               2016 OpenCFD Ltd.
+    \\  /    A nd           | Copyright (C) 2015 Norbert Podhorszki
+     \\/     M anipulation  | Copyright (C) 2016 OpenCFD Ltd.
 -------------------------------------------------------------------------------
 License
     This file is part of OpenFOAM.
@@ -26,14 +25,21 @@ Class
     Foam::adiosWrite
 
 Description
-    Writes selected (vector and scalar) fields and particle clouds to an
-    ADIOS file.
+    Writes fields and particle clouds to an ADIOS file.
     Based on the IOh5Write module created by
        Håkon Strandenes, hakostra@stud.ntnu.no
 
 SourceFiles
+    ParticleBinaryBlob.C
+    ParticleBinaryBlobFragment.C
+    adiosCloudTemplates.C
+    adiosCore.C
+    adiosFieldTemplates.C
+    adiosRestart.C
     adiosWrite.C
-    IOadiosWrite.H
+    adiosWriteCloud.C
+    adiosWriteField.C
+    adiosWriteFunctionObject.C
 
 Author
     Norbert Podhorszki, pnorbert@ornl.gov, 2015
@@ -45,6 +51,7 @@ Author
 
 #include "adiosCore.H"
 #include "adiosReader.H"
+#include "adiosCoreWrite.H"
 #include "adiosTime.H"
 
 #include "runTimeSelectionTables.H"
@@ -76,7 +83,7 @@ class dictionary;
 
 class adiosWrite
 :
-    public adiosCore
+    public adiosCoreWrite
 {
     // Forward declarations of various sub-components
         class regionInfo;
@@ -94,20 +101,14 @@ class adiosWrite
         //- track time index from restart (avoid write immediately after restart)
         int restartIndex_;
 
-        // Restart time requested
+        //- Restart time requested
         scalar restartTime_;
 
+        //- List of region information
+        typedef SLList<regionInfo> RegionInfoContainer;
+
         //- List of regions holding all data needed (mesh, names)
-        SLList<regionInfo> regions_;
-
-        //- ADIOS input read method (default: BP)
-        word readMethod_;
-
-        //- ADIOS output write method (default: MPI)
-        word writeMethod_;
-
-        //- ADIOS output write parameters (default: "")
-        string writeParams_;
+        RegionInfoContainer regions_;
 
         //- Write interval (in number of iterations)
         label writeInterval_;
@@ -116,27 +117,17 @@ class adiosWrite
         label nextWrite_;
         label timeSteps_;
 
-        // ADIOS File and other identifiers
-        int64_t  fileID_;     // file handler from open()
-        int64_t  groupID_;    // group of output variables
-        uint64_t outputSize_; // number of bytes we write in one timestep by the process
+    // Private Member Functions
 
-        // MPI parallel code variables
-        MPI_Comm comm_; // Pstream:: does not provide communicator
+        //- Disallow default bitwise copy construct
+        adiosWrite(const adiosWrite&);
 
-        // rank = Pstream::myProcNo()
-        // number of processors = Pstream::nProcs()
-        // process id: Pstream::procID (int procNo), 1 for rank 0
-
-        //- Buffer for reading/writing streamed content to/from adious files
-        DynamicCharList iobuffer_;
+        //- Disallow default bitwise assignment
+        void operator=(const adiosWrite&);
 
 protected:
 
     // Static Member Functions
-
-        //- Is field-type supported?
-        static bool supportedFieldType(const word& fieldType);
 
         //- Return name of cloud-type (or surrogate) or empty word
         static word supportedCloudType(const word& cloudType);
@@ -146,313 +137,18 @@ protected:
 
         // General functions
 
-            //- Create and open dataset for all data
-            void open();
-
-            //- Close dataset
-            void close();
-
-
-        // General adios handling
-
-            //- Define a variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineVariable
-            (
-                const char* name,
-                enum ADIOS_DATATYPES type,
-                size_t count
-            );
-
-            //- Define a variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineVariable
-            (
-                const string& name,
-                enum ADIOS_DATATYPES type,
-                size_t count
-            );
-
-            //- Define an integer variable containing a single element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the storage size
-            size_t defineIntVariable
-            (
-                const char* name
-            );
-
-            //- Define an integer variable containing a single element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the storage size
-            size_t defineIntVariable
-            (
-                const string& name
-            );
-
-            //- Define an integer variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineIntVariable
-            (
-                const char* name,
-                size_t count
-            );
-
-            //- Define an integer variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineIntVariable
-            (
-                const string& name,
-                size_t count
-            );
-
-            //- Define a double variable containing a single element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the storage size
-            size_t defineScalarVariable
-            (
-                const char* name
-            );
-
-            //- Define a double variable containing a single element
-            //  To be stored as part of a global 1D array of this name
-            //  Increment the output size and return the storage size
-            size_t defineScalarVariable
-            (
-                const string& name
-            );
-
-            //- Define a double variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineScalarVariable
-            (
-                const char* name,
-                size_t count
-            );
-
-            //- Define a double variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineScalarVariable
-            (
-                const string& name,
-                size_t count
-            );
-
-            //- Define a byte-stream variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineStreamVariable
-            (
-                const char* name,
-                size_t count
-            );
-
-            //- Define a byte-stream variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineStreamVariable
-            (
-                const string& name,
-                size_t count
-            );
-
-            //- Define a vector (3 items) variable containing a single element
-            //  Increment the output size and return the storage size
-            size_t defineVectorVariable
-            (
-                const char* name
-            );
-
-            //- Define a vector (3 items) variable containing a single element
-            //  Increment the output size and return the storage size
-            size_t defineVectorVariable
-            (
-                const string& name
-            );
-
-            //- Define a vector (3 items) variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineVectorVariable
-            (
-                const char* name,
-                size_t count
-            );
-
-            //- Define a vector (3 items) variable with count elements
-            //  Increment the output size and return the storage size
-            size_t defineVectorVariable
-            (
-                const string& name,
-                size_t count
-            );
-
-            //- Define a string attribute
-            void defineAttribute
-            (
-                const char* attrName,
-                const char* varName,
-                const string& value
-            );
-
-            //- Define a string attribute
-            void defineAttribute
-            (
-                const char* attrName,
-                const string& varName,
-                const string& value
-            );
-
-            //- Define an int attribute
-            void defineIntAttribute
-            (
-                const char* attrName,
-                const char* varName,
-                const int value
-            );
-
-            //- Define an int attribute
-            void defineIntAttribute
-            (
-                const char* attrName,
-                const string& varName,
-                const int value
-            );
-
-            //- Define an integer array attribute
-            bool defineListAttribute
-            (
-                const char* attrName,
-                const string& varName,
-                const UList<int>& list
-            );
-
-            //- Define a string array attribute
-            bool defineListAttribute
-            (
-                const char* attrName,
-                const string& varName,
-                const wordList& list
-            );
-
-            //- Define a string array attribute
-            bool defineListAttribute
-            (
-                const char* attrName,
-                const string& varName,
-                const stringList& list
-            );
-
-            //- Write a variable
-            void writeVariable
-            (
-                const char* name,
-                const void* value
-            );
-
-            //- Write a variable
-            void writeVariable
-            (
-                const string& name,
-                const void* value
-            );
-
-            //- Write a variable from the list contents
-            template<class T>
-            void writeVariable
-            (
-                const char* name,
-                const UList<T>& list
-            )
-            {
-                writeVariable(name, list.cdata());
-            }
-
-            //- Write a variable from the list contents
-            template<class T>
-            void writeVariable
-            (
-                const string& name,
-                const UList<T>& list
-            )
-            {
-                writeVariable(name, list.cdata());
-            }
-
-            //- Write a variable with a single integer
-            void writeIntVariable
-            (
-                const char* name,
-                const int value
-            );
-
-            //- Write a variable with a single integer
-            void writeIntVariable
-            (
-                const string& name,
-                const int value
-            );
-
-            //- Write a variable with a single double value
-            void writeScalarVariable
-            (
-                const char* name,
-                const double value
-            );
-
-            //- Write a variable with a single double value
-            void writeScalarVariable
-            (
-                const string& name,
-                const double value
-            );
-
-            //- Write a variable with a single vector value
-            void writeVectorVariable
-            (
-                const char* name,
-                const vector& value
-            );
-
-            //- Write a variable with a single vector value
-            void writeVectorVariable
-            (
-                const string& name,
-                const vector& value
-            );
+            //- Create and open dataset for all data at given time-step
+            bool open(const Time&);
 
 
         // Functions for handling field data
 
-            //- Field define wrapper
-            //  Return the maximum associated stream length
-            size_t fieldDefine(const regionInfo&);
-
-            //- Field define for a given type
-            //  Return the maximum associated stream length
-            template<class FieldType>
-            size_t fieldDefine
-            (
-                const FieldType& field,
-                const fileName& varPath
-            );
-
-
-            //- Field define for a given type
-            //  Return the maximum associated stream length
-            template<class FieldType>
-            size_t fieldDefineInternal
-            (
-                const FieldType& field,
-                const fileName& varPath
-            );
+            //- Define fields for the region
+            //  Return the number of fields defined.
+            label fieldDefine(const regionInfo&);
 
             //- Field write wrapper
             void fieldWrite(const regionInfo&);
-
-            //- Write data for a given type
-            template<class FieldType>
-            void fieldWrite
-            (
-                const FieldType& field,
-                const fileName& varPath
-            );
 
             //- Read data for a given volume field type
             bool readVolField
@@ -492,14 +188,14 @@ protected:
 
       // Functions for handling particle cloud data
 
-            //- Define ADIOS cloud variables/attributes
-            size_t cloudDefine(regionInfo&);
+            //- Define ADIOS cloud variables/attributes for the region.
+            //  Return the number of clouds defined.
+            label cloudDefine(regionInfo&);
 
 
             //- Cloud define for a given type
-            //  Return the maximum associated stream length
             template<class CloudType>
-            size_t cloudDefine
+            bool cloudDefine
             (
                 const CloudType& cloud,
                 cloudInfo& cInfo,
@@ -520,48 +216,30 @@ protected:
             );
 
 
-        // Functions for handling mesh
-
-            //- Define ADIOS mesh variables
-            //  If the region has been updated
-            size_t meshDefine(const regionInfo&);
-
-            //- Write ADIOS mesh variables
-            //  If the region has been updated
-            void meshWrite(const regionInfo&);
-
-
         // Miscallenous definitions
 
             //- Classify field types, returns the number of fields
-            label classifyFields
-            (
-                bool verbose = false
-            );
-
-            //- Disallow default bitwise copy construct
-            adiosWrite(const adiosWrite&);
-
-            //- Disallow default bitwise assignment
-            void operator=(const adiosWrite&);
+            label classifyFields(bool verbose = false);
 
             //- Define ADIOS variables (before writing them)
             //  Mesh information is defined if the region has been updated
-            size_t defineVars();
+            void defineVars();
 
-            void deleteDefinitions();
+            //- Write all known ADIOS variables
+            void writeVars();
+
 
         // Restart functions
 
             adiosTime readData(const fileName&);
             adiosTime readData(const instant& when);
 
-            //- Read data from a given time
-            // attempt to read data for all variables existing in memory
-            // returns true on success, false on failure
+            //- Read data from current time
+            //  Attempt to read data for all variables existing in memory
+            //  Returns time information on success, invalid on failure
             adiosTime readData();
 
-            //- Execute, handles restart at first call if requested
+            //- Restart functionality
             bool restart();
 
 public:
@@ -792,8 +470,11 @@ public:
     //- Fields to be written. Field name as key, class as value
     HashTable<word> fieldsToWrite_;
 
+    //- List of cloud information
+    typedef SLList<cloudInfo> CloudInfoContainer;
+
     //- Clouds to be processed
-    SLList<cloudInfo> cloudInfo_;
+    CloudInfoContainer cloudInfo_;
 
 
     //- Construct null
@@ -829,8 +510,8 @@ public:
     }
 
 
-    //- Set topology changing
-    void meshChanging(bool force, const fvMesh& mesh) const
+    //- Set topology changing information, optionally force update
+    void meshChanging(const fvMesh& mesh, bool force = false) const
     {
         if (force)
         {

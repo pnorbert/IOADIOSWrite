@@ -36,63 +36,6 @@ License
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 template<class FieldType>
-size_t Foam::adiosWrite::fieldDefineInternal
-(
-    const FieldType& field,
-    const fileName& varPath
-)
-{
-    // could also write field.dimensions() as an attribute (as required)
-    defineAttribute("class", varPath, field.type());
-
-    OutputCounter counter(adiosCore::strFormat);
-    counter << field;
-
-    return defineStreamVariable(varPath, counter.size());
-}
-
-
-template<class FieldType>
-size_t Foam::adiosWrite::fieldDefine
-(
-    const FieldType& field,
-    const fileName& varPath
-)
-{
-    const typename FieldType::GeometricBoundaryField& bfield =
-        field.boundaryField();
-
-    // independent of how we store fields,
-    // a quick lookup of field patch types may prove useful
-    stringList pTypes(bfield.size());
-    forAll(bfield, patchI)
-    {
-        pTypes[patchI] = bfield[patchI].type();
-    }
-    defineListAttribute("patch-types", varPath, pTypes);
-
-    return fieldDefineInternal(field, varPath);
-}
-
-
-template<class FieldType>
-void Foam::adiosWrite::fieldWrite
-(
-    const FieldType& field,
-    const fileName& varPath
-)
-{
-    Info<< "    fieldWrite: " << varPath << endl;
-
-    OutputBufStreamer os(iobuffer_, adiosCore::strFormat);
-    os << field;
-
-    // Do the actual write (as stream)
-    writeVariable(varPath, iobuffer_);
-}
-
-
-template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (
     FieldType& field,
