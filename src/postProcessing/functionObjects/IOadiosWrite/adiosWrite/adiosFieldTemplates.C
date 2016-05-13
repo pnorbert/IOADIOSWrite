@@ -35,6 +35,7 @@ License
 
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
+
 template<class FieldType>
 bool Foam::adiosWrite::fieldRead
 (

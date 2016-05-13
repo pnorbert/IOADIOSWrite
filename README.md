@@ -12,13 +12,13 @@
 
 ---
 
-2016-05-11
+2016-05-13
 
 ---
 
 * Storage directory:  "adiosData/"
 
-* Each "bp" (binary packed) adios file is restricted to a single
+* Each "bp" (binary packed) adios file is restricted to a ***single***
   time-step/iteration. This makes for simple and efficient handling.
 
 * In rare cases are values stored in global arrays with offsets.
@@ -56,6 +56,11 @@ All entries are considered mandatory.
 | string[]| /openfoam/topo-change       | {"region0"}
 
 
+The number of regions can either be obtained directly from the
+`/openfoam/nRegions` attribute, or aternatively from the list length
+of the `/openfoam/regions` attribute. No particular sort order is
+specified for the region names.
+
 ### General Variables
 
 Coordinated data for all mesh, fields and cloud information.
@@ -64,11 +69,26 @@ Coordinated data for all mesh, fields and cloud information.
 |---------|-----------------------------|-------------
 | _any_   | /constant/...               | _reserved_
 | _any_   | /system/...                 | _reserved_
-| int     | /time/index                 | iteration
-| double  | /time/value                 | time-value
-| double  | /time/deltaT                |
-| double  | /time/deltaT0               |
 
+
+### Time Attributes
+
+Since each file is restricted to a ***single*** time-step/iteration,
+which inherently identical across all processes, the time management
+values are tracked as attributes rather than as variables. This
+additionally simplifies later post-processing, since the attribute
+values are available directly from the meta-data.
+
+
+| type    | name            | comment
+|---------|-----------------|-------------
+| int     | /time/index     | iteration value
+| double  | /time/value     | time-value
+| double  | /time/deltaT    | current time-step value
+| double  | /time/deltaT0   | previous time-step value
+
+The attribute `/time/value` can be considered to be a global time value
+for all fields and clouds contained within the file.
 
 
 ### Region Attributes

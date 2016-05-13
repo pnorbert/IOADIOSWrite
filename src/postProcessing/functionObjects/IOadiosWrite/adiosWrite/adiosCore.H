@@ -98,11 +98,14 @@ protected:
 
 public:
 
-    // static const IOstream::streamFormat strFormat = IOstream::ASCII;
-    static const IOstream::streamFormat strFormat = IOstream::BINARY;
-
     //- OpenFOAM global attributes within ADIOS file
     static const string foamAttribute;
+
+    //- OpenFOAM time attributes within ADIOS file
+    static const string timeAttribute;
+
+    // static const IOstream::streamFormat strFormat = IOstream::ASCII;
+    static const IOstream::streamFormat strFormat = IOstream::BINARY;
 
     typedef OCompactStringStream    OutputStringStreamer;
     typedef OCompactBufStream       OutputBufStreamer;

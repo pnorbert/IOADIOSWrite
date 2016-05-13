@@ -37,10 +37,10 @@ namespace Foam
         4
     >::names[] =
     {
-        "/time/index",
-        "/time/value",
-        "/time/deltaT",
-        "/time/deltaT0"
+        "index",
+        "value",
+        "deltaT",
+        "deltaT0"
     };
 }
 
@@ -69,12 +69,12 @@ Foam::adiosTime::adiosTime(const TimeState& t)
 {}
 
 
-Foam::adiosTime::adiosTime(const adiosReader& reader)
+Foam::adiosTime::adiosTime(const adiosReader& r)
 :
-    index_(reader.getIntVariable(attr[INDEX])),
-    value_(reader.getScalarVariable(attr[VALUE])),
-    deltaT_(reader.getScalarVariable(attr[DT])),
-    deltaT0_(reader.getScalarVariable(attr[DT0]))
+    index_(r.getIntAttribute(adiosCore::timeAttribute/attr[INDEX])),
+    value_(r.getScalarAttribute(adiosCore::timeAttribute/attr[VALUE])),
+    deltaT_(r.getScalarAttribute(adiosCore::timeAttribute/attr[DT])),
+    deltaT0_(r.getScalarAttribute(adiosCore::timeAttribute/attr[DT0]))
 {}
 
 

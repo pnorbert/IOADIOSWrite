@@ -109,6 +109,38 @@ Foam::adiosReader::getIntListAttribute(const string& name) const
 }
 
 
+inline double
+Foam::adiosReader::getScalarAttribute(const string& name) const
+{
+    double value;
+
+    if (!readScalarAttributeIfPresent(name, value))
+    {
+        FatalErrorInFunction
+            << "double attribute missing: " << name
+            << exit(FatalIOError);
+    }
+
+    return value;
+}
+
+
+inline Foam::List<double>
+Foam::adiosReader::getScalarListAttribute(const string& name) const
+{
+    List<double> value;
+
+    if (!readScalarListAttributeIfPresent(name, value))
+    {
+        FatalErrorInFunction
+            << "double-list attribute missing: " << name
+            << exit(FatalIOError);
+    }
+
+    return value;
+}
+
+
 inline Foam::string
 Foam::adiosReader::getStringAttribute(const string& name) const
 {

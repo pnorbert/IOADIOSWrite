@@ -149,11 +149,27 @@ public:
         ) const;
 
 
-        //- Read string-list attribute if it exists
+        //- Read int-list attribute if it exists
         bool readIntListAttributeIfPresent
         (
             const string& attrName,
             List<label>& lst
+        ) const;
+
+
+        //- Read double attribute if it exists
+        bool readScalarAttributeIfPresent
+        (
+            const string& attrName,
+            double& value
+        ) const;
+
+
+        //- Read double-list attribute if it exists
+        bool readScalarListAttributeIfPresent
+        (
+            const string& attrName,
+            List<double>& lst
         ) const;
 
 
@@ -195,6 +211,12 @@ public:
 
         //- Get a mandatory integer list attribute
         inline List<label> getIntListAttribute(const string& name) const;
+
+        //- Get a mandatory scalar attribute
+        inline double getScalarAttribute(const string& name) const;
+
+        //- Get a mandatory scalar list attribute
+        inline List<double> getScalarListAttribute(const string& name) const;
 
         //- Get a mandatory string attribute
         inline string getStringAttribute(const string& name) const;

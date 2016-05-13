@@ -359,7 +359,6 @@ bool Foam::adiosWrite::open(const Time& t)
 
     if (adiosCoreWrite::open(dataDirectory/t.timeName() + ".bp"))
     {
-        adiosCoreWrite::writeTime(t);
         return true;
     }
 
@@ -390,10 +389,6 @@ bool Foam::adiosWrite::restart()
     }
 
     Info<<"restart from adios " << adiosTimes[adiosTimeIndex] << endl;
-
-    // Classify fields in the object space,
-    // then read data from restart file for each
-    classifyFields();
 
     adiosTime bpTime = readData(adiosTimes[adiosTimeIndex]);
     if (bpTime.valid())
@@ -509,20 +504,15 @@ void Foam::adiosWrite::write()
         */
 #endif
 
-        classifyFields(true); // verbose
-
-        // remove old ADIOS variables/attributes
-        // - new variables may have appeared (eg, via function objects) etc
-        // - patch sizes may change with every step
-        // -> simply update everything for simplicity
+        // remove all old ADIOS variables/attributes since new variables may
+        // have appeared (eg, via function objects), fields sizes changed ...
+        // -> update everything for simplicity/consistency
         adiosCoreWrite::reset();
 
-        defineVars();  // ADIOS requires variables to be defined before writing
-        open(time_);   // ADIOS output file for this time step
+        open(time_);                    // output file for this time step
+        defineVars();
         writeVars();
-
-        // close ADIOS dataset at every timestep - flushes data from memory
-        adiosCoreWrite::close();
+        adiosCoreWrite::close();        // close/flush at every timestep
     }
 
     ++timeSteps_; // update counter
@@ -539,6 +529,7 @@ void Foam::adiosWrite::defineVars()
         << obr_.time().timeIndex() << endl;
 
     adiosCoreWrite::defineBaseAttributes();
+    adiosCoreWrite::defineTimeAttributes(time_);
 
     // other general information
     defineIntAttribute("nRegions",  adiosCore::foamAttribute, regions_.size());
@@ -574,7 +565,6 @@ void Foam::adiosWrite::defineVars()
         defineListAttribute("topo-change", adiosCore::foamAttribute, topo);
     }
 
-    adiosCoreWrite::defineTime();
 
     forAllIter(RegionInfoContainer, regions_, iter)
     {
@@ -593,6 +583,7 @@ void Foam::adiosWrite::defineVars()
             }
         }
 
+        rInfo.classifyFields(mesh, true);    // verbose
 
         fieldDefine(rInfo);
         cloudDefine(rInfo);

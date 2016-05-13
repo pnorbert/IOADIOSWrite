@@ -148,15 +148,6 @@ bool Foam::adiosCoreWrite::open(const fileName& dataFile)
 
         fileID_ = 0;
     }
-    else
-    {
-        // --
-        // Tell ADIOS how many bytes we are going to write in this step (by this process)
-        // Not needed in current (git) version (2016-05-01)
-        // --
-        /// uint64_t total; // user data bytes + metadata, buffer size should be bigger
-        /// adios_group_size(fileID_, outputSize(), &total);
-    }
 
     return fileID_ != 0;
 }
@@ -259,12 +250,41 @@ void Foam::adiosCoreWrite::defineBaseAttributes()
 }
 
 
+void Foam::adiosCoreWrite::defineTimeAttributes(const TimeState& t)
+{
+    defineIntAttribute
+    (
+        adiosTime::attr[adiosTime::INDEX],
+        adiosCore::timeAttribute,
+        t.timeIndex()
+    );
+    defineScalarAttribute
+    (
+        adiosTime::attr[adiosTime::VALUE],
+        adiosCore::timeAttribute,
+        t.timeOutputValue()
+    );
+    defineScalarAttribute
+    (
+        adiosTime::attr[adiosTime::DT],
+        adiosCore::timeAttribute,
+        t.deltaTValue()
+    );
+    defineScalarAttribute
+    (
+        adiosTime::attr[adiosTime::DT0],
+        adiosCore::timeAttribute,
+        t.deltaT0Value()
+    );
+}
+
+
 void Foam::adiosCoreWrite::defineTime()
 {
-    defineIntVariable(adiosTime::attr[adiosTime::INDEX]);
-    defineScalarVariable(adiosTime::attr[adiosTime::VALUE]);
-    defineScalarVariable(adiosTime::attr[adiosTime::DT]);
-    defineScalarVariable(adiosTime::attr[adiosTime::DT0]);
+    defineIntVariable(adiosCore::timeAttribute/adiosTime::attr[adiosTime::INDEX]);
+    defineScalarVariable(adiosCore::timeAttribute/adiosTime::attr[adiosTime::VALUE]);
+    defineScalarVariable(adiosCore::timeAttribute/adiosTime::attr[adiosTime::DT]);
+    defineScalarVariable(adiosCore::timeAttribute/adiosTime::attr[adiosTime::DT0]);
 }
 
 
@@ -272,22 +292,22 @@ void Foam::adiosCoreWrite::writeTime(const TimeState& t)
 {
     writeIntVariable
     (
-        adiosTime::attr[adiosTime::INDEX],
+        adiosCore::timeAttribute/adiosTime::attr[adiosTime::INDEX],
         t.timeIndex()
     );
     writeScalarVariable
     (
-        adiosTime::attr[adiosTime::VALUE],
+        adiosCore::timeAttribute/adiosTime::attr[adiosTime::VALUE],
         t.timeOutputValue()
     );
     writeScalarVariable
     (
-        adiosTime::attr[adiosTime::DT],
+        adiosCore::timeAttribute/adiosTime::attr[adiosTime::DT],
         t.deltaTValue()
     );
     writeScalarVariable
     (
-        adiosTime::attr[adiosTime::DT0],
+        adiosCore::timeAttribute/adiosTime::attr[adiosTime::DT0],
         t.deltaT0Value()
     );
 }
@@ -628,6 +648,38 @@ void Foam::adiosCoreWrite::defineIntAttribute
 )
 {
     defineIntAttribute(attrName, varName.c_str(), value);
+}
+
+
+void Foam::adiosCoreWrite::defineScalarAttribute
+(
+    const char* attrName,
+    const char* varName,
+    const double value
+)
+{
+    double fltval = value;
+
+    adios_define_attribute_byvalue
+    (
+        groupID_,
+        attrName,
+        varName,
+        adios_double,
+        1,
+        &fltval
+    );
+}
+
+
+void Foam::adiosCoreWrite::defineScalarAttribute
+(
+    const char* attrName,
+    const string& varName,
+    const double value
+)
+{
+    defineScalarAttribute(attrName, varName.c_str(), value);
 }
 
 

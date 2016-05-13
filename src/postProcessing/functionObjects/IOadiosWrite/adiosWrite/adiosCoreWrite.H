@@ -144,6 +144,9 @@ protected:
         //- Define base attributes
         void defineBaseAttributes();
 
+        //- Define attributes for OpenFOAM time information
+        void defineTimeAttributes(const TimeState&);
+
         //- Define variables for OpenFOAM time information
         void defineTime();
 
@@ -164,7 +167,7 @@ protected:
         int64_t defineField
         (
             const FieldType& field,
-            const fileName& varPath
+            const fileName& basePath
         );
 
         //- Define adios variable for internal field, return adios Id.
@@ -172,7 +175,7 @@ protected:
         int64_t defineInternalField
         (
             const FieldType& field,
-            const fileName& varPath
+            const fileName& basePath
         );
 
         //- Write field data for a given type
@@ -180,7 +183,7 @@ protected:
         void writeField
         (
             const FieldType& field,
-            const fileName& varPath
+            const fileName& basePath
         );
 
 
@@ -303,6 +306,14 @@ protected:
             const char* attrName,
             const string& varName,
             const int value
+        );
+
+        //- Define a double attribute
+        void defineScalarAttribute
+        (
+            const char* attrName,
+            const char* varName,
+            const double value
         );
 
         //- Define a double attribute

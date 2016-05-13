@@ -218,9 +218,6 @@ protected:
 
         // Miscallenous definitions
 
-            //- Classify field types, returns the number of fields
-            label classifyFields(bool verbose = false);
-
             //- Define ADIOS variables (before writing them)
             //  Mesh information is defined if the region has been updated
             void defineVars();
@@ -573,7 +570,7 @@ public:
     }
 
     //- Path name for fields
-    inline fileName fieldPath(const string& var) const
+    inline fileName fieldPath(const string& var = string::null) const
     {
         return adiosCore::fieldPath(name_, var);
     }

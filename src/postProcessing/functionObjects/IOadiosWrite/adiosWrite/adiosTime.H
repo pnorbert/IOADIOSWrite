@@ -34,6 +34,8 @@ SourceFiles
 #ifndef adiosTime_H
 #define adiosTime_H
 
+#include "adiosCore.H"
+
 #include "NamedEnum.H"
 #include "TimeState.H"
 

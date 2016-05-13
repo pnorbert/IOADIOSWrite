@@ -37,16 +37,18 @@ template<class FieldType>
 int64_t Foam::adiosCoreWrite::defineInternalField
 (
     const FieldType& field,
-    const fileName& varPath
+    const fileName& basePath
 )
 {
+    const fileName varName = basePath/field.name();
+
     // could also write field.dimensions() as an attribute (as required)
-    defineAttribute("class", varPath, field.type());
+    defineAttribute("class", varName, field.type());
 
     OutputCounter counter(adiosCore::strFormat);
     counter << field;
 
-    return defineStreamVariable(varPath, counter.size());
+    return defineStreamVariable(varName, counter.size());
 }
 
 
@@ -54,9 +56,11 @@ template<class FieldType>
 int64_t Foam::adiosCoreWrite::defineField
 (
     const FieldType& field,
-    const fileName& varPath
+    const fileName& basePath
 )
 {
+    const fileName varName = basePath/field.name();
+
     const typename FieldType::GeometricBoundaryField& bfield =
         field.boundaryField();
 
@@ -67,9 +71,9 @@ int64_t Foam::adiosCoreWrite::defineField
     {
         pTypes[patchI] = bfield[patchI].type();
     }
-    defineListAttribute("patch-types", varPath, pTypes);
+    defineListAttribute("patch-types", varName, pTypes);
 
-    return defineInternalField(field, varPath);
+    return defineInternalField(field, basePath);
 }
 
 
@@ -77,7 +81,7 @@ template<class FieldType>
 void Foam::adiosCoreWrite::writeField
 (
     const FieldType& field,
-    const fileName& varPath
+    const fileName& basePath
 )
 {
     // use iobuffer_ to avoid reallocations
@@ -88,7 +92,7 @@ void Foam::adiosCoreWrite::writeField
     os << field;
 
     // Do the actual write (as stream)
-    writeVariable(varPath, iobuffer_);
+    writeVariable(basePath/field.name(), iobuffer_);
 }
 
 

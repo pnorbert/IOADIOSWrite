@@ -355,6 +355,154 @@ bool Foam::adiosReader::readIntAttributeIfPresent
 }
 
 
+bool Foam::adiosReader::readScalarAttributeIfPresent
+(
+    const string& name,
+    double& value
+) const
+{
+    enum ADIOS_DATATYPES type = adios_unknown;
+    int  size = 0;
+    void *data = 0;
+
+    bool ok =
+    (
+        hasAttribute(name)
+     && 0 ==
+        adios_get_attr_byid
+        (
+            file,
+            attributes[name],
+            &type,
+            &size,
+            &data
+        )
+    );
+
+    if (ok)
+    {
+        if (type == adios_double)
+        {
+            size /= sizeof(double);
+            ok = (size == 1);
+
+            if (ok)
+            {
+                value = *(reinterpret_cast<int*>(data));
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (data)
+        {
+            free(data);
+        }
+
+        if (!ok)
+        {
+            if (size)
+            {
+                FatalErrorInFunction
+                    << "too many elements for attribute: " << name << nl
+                    << "  expecting 1 double, found " << size
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for attribute: " << name << nl
+                    << "  expecting double, found "
+                    << adios_type_to_string(type)
+                    << exit(FatalIOError);
+            }
+        }
+    }
+
+    return ok;
+}
+
+
+bool Foam::adiosReader::readScalarListAttributeIfPresent
+(
+    const string& name,
+    List<double>& lst
+) const
+{
+    enum ADIOS_DATATYPES type = adios_unknown;
+    int  size = 0;
+    void *data = 0;
+
+    bool ok =
+    (
+        hasAttribute(name)
+     && 0 ==
+        adios_get_attr_byid
+        (
+            file,
+            attributes[name],
+            &type,
+            &size,
+            &data
+        )
+    );
+
+    if (ok)
+    {
+        if (type == adios_double)
+        {
+            size /= sizeof(double);
+            ok = (size > 1);
+
+            if (ok)
+            {
+                double *ptr = reinterpret_cast<double*>(data);
+
+                lst.setSize(size);
+                for (int i=0; i < size; ++i)
+                {
+                    lst[i] = ptr[i];
+                }
+            }
+        }
+        else
+        {
+            size = 0;
+            ok = false;
+        }
+
+        if (data)
+        {
+            free(data);
+        }
+
+        if (!ok)
+        {
+            if (size == 1)
+            {
+                FatalErrorInFunction
+                    << "too few elements for attribute: " << name << nl
+                    << "  expecting multiple double values, found 1"
+                    << exit(FatalIOError);
+            }
+            else
+            {
+                FatalErrorInFunction
+                    << "incorrect type for attribute: " << name << nl
+                    << "  expecting double, found "
+                    << adios_type_to_string(type)
+                    << exit(FatalIOError);
+            }
+        }
+    }
+
+    return ok;
+}
+
+
 bool Foam::adiosReader::readIntListAttributeIfPresent
 (
     const string& name,

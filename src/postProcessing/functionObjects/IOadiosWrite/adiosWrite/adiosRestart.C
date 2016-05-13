@@ -32,6 +32,7 @@ License
 #include "basicKinematicCollidingCloud.H"
 #include "reactingCloud.H"
 #include "emptyFvPatchField.H"
+#include "pointFields.H"
 
 #include "IBufStream.H"
 
@@ -51,7 +52,7 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
 
     adiosTime timeInfo(reader);
 
-    iobuffer_.reserve(reader.sizeOf());
+    iobuffer_.reserve(reader.sizeOf());  // this is per process
 
     // direct lookup via time_.lookupClass<fvMesh>() would be nice,
     // but have to trick the compiler not to get the const-version.
@@ -148,13 +149,98 @@ bool Foam::adiosWrite::readVolField
     }
 
     Info<<"read " << obj->name() << " (type " << fieldType << ") from file\n";
-    if (fieldType == volScalarField::typeName)
+
+    // point fields
+    if (fieldType == pointScalarField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<pointScalarField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == pointVectorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<pointVectorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == pointSphericalTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<pointSphericalTensorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == pointSymmTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<pointSymmTensorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == pointTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<pointTensorField&>(*obj),
+            reader, src
+        );
+    }
+
+    // surface fields
+    else if (fieldType == surfaceScalarField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<surfaceScalarField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == surfaceVectorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<surfaceVectorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == surfaceSphericalTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<surfaceSphericalTensorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == surfaceSymmTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<surfaceSymmTensorField&>(*obj),
+            reader, src
+        );
+    }
+    else if (fieldType == surfaceTensorField::typeName)
+    {
+        return fieldRead
+        (
+            static_cast<surfaceTensorField&>(*obj),
+            reader, src
+        );
+    }
+
+    // volume fields
+    else if (fieldType == volScalarField::typeName)
     {
         return fieldRead
         (
             static_cast<volScalarField&>(*obj),
-            reader,
-            src
+            reader, src
         );
     }
     else if (fieldType == volVectorField::typeName)
@@ -162,17 +248,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volVectorField&>(*obj),
-            reader,
-            src
-        );
-    }
-    else if (fieldType == surfaceScalarField::typeName)
-    {
-        return fieldRead
-        (
-            static_cast<surfaceScalarField&>(*obj),
-            reader,
-            src
+            reader, src
         );
     }
     else if (fieldType == volSphericalTensorField::typeName)
@@ -180,8 +256,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volSphericalTensorField&>(*obj),
-            reader,
-            src
+            reader, src
         );
     }
     else if (fieldType == volSymmTensorField::typeName)
@@ -189,8 +264,7 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volSymmTensorField&>(*obj),
-            reader,
-            src
+            reader, src
         );
     }
     else if (fieldType == volTensorField::typeName)
@@ -198,10 +272,11 @@ bool Foam::adiosWrite::readVolField
         return fieldRead
         (
             static_cast<volTensorField&>(*obj),
-            reader,
-            src
+            reader, src
         );
     }
+    // TODO: internal volume fields
+
     else
     {
         return false;

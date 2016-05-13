@@ -27,6 +27,8 @@ License
 #include "nullObject.H"
 #include "IOstreams.H"
 
+#include "pointFields.H"
+
 // * * * * * * * * * * * * * Private Member Functions  * * * * * * * * * * * //
 
 bool Foam::adiosCoreWrite::supportedFieldType(const word& fieldType)
@@ -38,14 +40,28 @@ bool Foam::adiosCoreWrite::supportedFieldType(const word& fieldType)
 
     return
     (
-        fieldType == volScalarField::typeName
-     || fieldType == volVectorField::typeName
+        // point fields
+        fieldType == pointScalarField::typeName
+     || fieldType == pointVectorField::typeName
+     || fieldType == pointSphericalTensorField::typeName
+     || fieldType == pointSymmTensorField::typeName
+     || fieldType == pointTensorField::typeName
+
+        // surface fields
      || fieldType == surfaceScalarField::typeName
+     || fieldType == surfaceVectorField::typeName
+     || fieldType == surfaceSphericalTensorField::typeName
+     || fieldType == surfaceSymmTensorField::typeName
+     || fieldType == surfaceTensorField::typeName
+
+        // volume fields
+     || fieldType == volScalarField::typeName
+     || fieldType == volVectorField::typeName
      || fieldType == volSphericalTensorField::typeName
      || fieldType == volSymmTensorField::typeName
      || fieldType == volTensorField::typeName
 
-        // internal fields
+        // internal volume fields
      || fieldType == volScalarField::DimensionedInternalField::typeName
      || fieldType == volVectorField::DimensionedInternalField::typeName
     );

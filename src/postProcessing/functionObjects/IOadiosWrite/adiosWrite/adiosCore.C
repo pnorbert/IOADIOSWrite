@@ -62,6 +62,9 @@ Foam::adiosCore::fileExt("bp");
 const Foam::string
 Foam::adiosCore::foamAttribute = "/openfoam";
 
+const Foam::string
+Foam::adiosCore::timeAttribute = "/time";
+
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
