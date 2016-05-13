@@ -650,7 +650,7 @@ bool Foam::adiosCoreWrite::defineListAttribute
         varName.c_str(),
         adios_integer,
         list.size(),
-        const_cast<int*>(list.cdata())  // adios has "void*" instead of "const void*"
+        list.cdata()
     );
 
     return true;
@@ -676,7 +676,7 @@ bool Foam::adiosCoreWrite::defineListAttribute
         varName.c_str(),
         adios_double,
         list.size(),
-        const_cast<double*>(list.cdata())  // adios has "void*" instead of "const void*"
+        list.cdata()
     );
 
     return true;
