@@ -84,7 +84,7 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
         }
     }
 
-
+#ifdef HAS_CLOUD_SUPPORT
     // clouds
     forAll(meshNames, regI)
     {
@@ -108,6 +108,7 @@ Foam::adiosTime Foam::adiosWrite::readData(const fileName& bpFile)
             }
          }
     }
+#endif
 
     reader.close();
 

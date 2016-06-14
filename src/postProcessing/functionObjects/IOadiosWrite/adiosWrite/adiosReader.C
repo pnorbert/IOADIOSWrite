@@ -258,6 +258,7 @@ Foam::adiosReader::getFieldInfo(const word& regName) const
 }
 
 
+#ifdef HAS_CLOUD_SUPPORT
 Foam::HashTable<Foam::adiosReader::cloudInfo>
 Foam::adiosReader::getCloudInfo(const word& regName) const
 {
@@ -279,7 +280,7 @@ Foam::adiosReader::getCloudInfo(const word& regName) const
 
     return table;
 }
-
+#endif
 
 bool Foam::adiosReader::readIntAttributeIfPresent
 (

@@ -586,7 +586,9 @@ void Foam::adiosWrite::defineVars()
         rInfo.classifyFields(mesh, true);    // verbose
 
         fieldDefine(rInfo);
+#ifdef HAS_CLOUD_SUPPORT
         cloudDefine(rInfo);
+#endif
     }
 }
 
@@ -619,7 +621,9 @@ void Foam::adiosWrite::writeVars()
         }
 
         fieldWrite(rInfo);
+#ifdef HAS_CLOUD_SUPPORT
         cloudWrite(rInfo);
+#endif
     }
 
 }

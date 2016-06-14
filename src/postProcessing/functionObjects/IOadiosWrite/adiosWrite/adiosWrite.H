@@ -55,8 +55,8 @@ Author
 #include "adiosTime.H"
 
 #include "runTimeSelectionTables.H"
-#include "interpolation.H"
-#include "fvMesh.H"
+#include "volFields.H"
+#include "surfaceFields.H"
 
 #include "adios.h"
 #include "adios_read.h"
@@ -607,7 +607,9 @@ public:
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 #ifdef NoRepository
+    #ifdef HAS_CLOUD_SUPPORT
     #include "adiosCloudTemplates.C"
+    #endif
     #include "adiosFieldTemplates.C"
 #endif
 
