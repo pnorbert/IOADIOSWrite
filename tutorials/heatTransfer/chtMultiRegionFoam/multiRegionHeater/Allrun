@@ -1,6 +1,21 @@
 #!/bin/sh
 cd ${0%/*} || exit 1    # Run from this directory
 
+# Copy base case
+original=$FOAM_TUTORIALS/heatTransfer/chtMultiRegionFoam/multiRegionHeater
+[ -d system ] || cp -r \
+    $original/0 \
+    $original/constant \
+    $original/system \
+    .
+
+# system/adiosDict
+[ -f system/adiosDict ] || cp adiosDict system/adiosDict
+
+# system/controlDict needs adios function object
+grep "libIOadiosWrite.so" system/controlDict > /dev/null 2>&1 || cat functionObjects >> system/controlDict
+
+
 # Source tutorial run functions
 . $WM_PROJECT_DIR/bin/tools/RunFunctions
 
@@ -25,14 +40,13 @@ done
 #runApplication `getApplication`
 
 # Decompose
-runApplication decomposePar -allRegions
+runApplication decomposePar -force -allRegions
 
 # Run
-runParallel `getApplication` 4
+runParallel `getApplication`
 
 # Reconstruct
 ## runApplication reconstructPar -allRegions
-
 
 ## echo
 ## echo "creating files for paraview post-processing"

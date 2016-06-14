@@ -1,0 +1,4 @@
+# ignore various things that are generated
+/constant/polyMesh
+/log.*
+/output

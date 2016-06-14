@@ -1,7 +1,8 @@
 #!/bin/bash
 
 # Copy base case
-[ -d system ] || cp -r $FOAM_TUTORIALS/lagrangian/icoUncoupledKinematicParcelFoam/hopper/hopperInitialState/* ./
+original=$FOAM_TUTORIALS/lagrangian/icoUncoupledKinematicParcelFoam/hopper/hopperInitialState
+[ -d system ] || cp -r $original/* .
 
 # system/adiosDict
 [ -f system/adiosDict ] || cp adiosDict system/adiosDict
@@ -16,7 +17,7 @@ grep "libIOadiosWrite.so" system/controlDict > /dev/null 2>&1 || cat functionObj
 # Mesh and run simulation
 runApplication blockMesh
 runApplication decomposePar
-runParallel `getApplication` 4
+runParallel `getApplication`
 
 # Dump last ADIOS file stats to terminal
 echo -e "\n\n"
