@@ -389,7 +389,7 @@ bool Foam::adiosReader::readScalarAttributeIfPresent
 
             if (ok)
             {
-                value = *(reinterpret_cast<int*>(data));
+                value = *(reinterpret_cast<double*>(data));
             }
         }
         else
